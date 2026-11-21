@@ -186,8 +186,8 @@ class DefaultRenderer extends Marked.Renderer {
           </span>
         </span>
         ${
-        icon && icon.text !== "Text"
-          ? `<button
+          icon && icon.text !== "Text"
+            ? `<button
             type="button"
             data-code="${escapeHtml(text)}"
             aria-label="Copy to Clipboard"
@@ -225,8 +225,8 @@ class DefaultRenderer extends Marked.Renderer {
               </svg>
             </span>
           </button>`
-          : ""
-      }
+            : ""
+        }
       </div>`;
     }
 

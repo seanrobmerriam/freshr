@@ -106,10 +106,10 @@ That's it! Now you can use Tailwind CSS in your project.
 > to get full intellisense support. For it to work you also need to set
 > `"nodeModulesDir": "manual"` in your `deno.json`.
 
-> [warn]: Tailwind CSS doesn't support the grouping syntax from twind:
-> `text(lg uppercase gray-100)`. These need to be rewritten to their expanded
-> values like `text-lg uppercase text-gray-100`. Selecting `data-*` or `aria-*`
-> attributes works a little different with Tailwind CSS as well.
+> [warn]: Tailwind CSS doesn't support the grouping syntax from twind: `text(lg
+> uppercase gray-100)`. These need to be rewritten to their expanded values like
+> `text-lg uppercase text-gray-100`. Selecting `data-*` or `aria-*` attributes
+> works a little different with Tailwind CSS as well.
 >
 > | Twind                       | Tailwind CSS                |
 > | --------------------------- | --------------------------- |

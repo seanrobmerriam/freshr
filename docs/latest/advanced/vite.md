@@ -144,8 +144,8 @@ If you passed options to `new Builder({ ... })` (custom `serverEntry`,
 `islandDir`, `routeDir`, `staticDir`, `ignore`), pass the equivalent options to
 `fresh({ ... })` — the names match. See [Configuration](#configuration) above.
 
-Any `builder.registerIsland("jsr:@scope/pkg/Island.tsx")` calls become
-`fresh({ islandSpecifiers: ["jsr:@scope/pkg/Island.tsx"] })`.
+Any `builder.registerIsland("jsr:@scope/pkg/Island.tsx")` calls become `fresh({
+islandSpecifiers: ["jsr:@scope/pkg/Island.tsx"] })`.
 
 ### 3. Add a `client.ts` entry
 

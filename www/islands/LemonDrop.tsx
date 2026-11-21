@@ -135,8 +135,7 @@ function LemonDrop() {
           points={springsPath}
           fill="white"
           transform="translate(0, 50)"
-        >
-        </polygon>
+        ></polygon>
       </svg>
     </>
   );
