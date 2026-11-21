@@ -46,10 +46,13 @@ function stubLogs() {
   );
 }
 
+const REPO_ROOT = path.join(import.meta.dirname!, "..", "..", "..");
+
 function withTmpDir(): Promise<{ dir: string } & AsyncDisposable> {
-  // Windows need temporary files in the repository root
+  // Windows need temporary files in the repository root. Being inside the
+  // repository also lets them resolve packages from its `node_modules`.
   if (process.platform === "win32") {
-    const dir = path.join(import.meta.dirname!, "..", "..", "..", "..");
+    const dir = REPO_ROOT;
     // Must stay empty: `init` refuses to write into a non-empty directory.
     return withTmpDirBase({ dir, prefix: "tmp_", tsconfig: false });
   }
@@ -68,13 +71,13 @@ async function patchProject(dir: string): Promise<void> {
   const pkg = JSON.parse(await fsp.readFile(pkgPath, "utf-8"));
   expect(pkg.dependencies.fresh).toMatch(/^npm:@fresh\/core@/);
 
-  const repoModules = path.join(
-    import.meta.dirname!,
-    "..",
-    "..",
-    "..",
-    "node_modules",
-  );
+  // Projects inside the repository already resolve its `node_modules` by
+  // walking up the directory tree. Linking isn't needed there, and directory
+  // links are unreliable on Windows.
+  const rel = path.relative(REPO_ROOT, dir);
+  if (!rel.startsWith("..") && !path.isAbsolute(rel)) return;
+
+  const repoModules = path.join(REPO_ROOT, "node_modules");
   await fsp.symlink(
     repoModules,
     path.join(dir, "node_modules"),
