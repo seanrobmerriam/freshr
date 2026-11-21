@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 /**
  * Example of external Fresh Island component.
  *

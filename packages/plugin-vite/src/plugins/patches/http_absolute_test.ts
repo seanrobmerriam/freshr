@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 import { expect } from "@std/expect/expect";
 import * as babel from "@babel/core";
 import { httpAbsolute } from "./http_absolute.ts";
@@ -13,7 +14,7 @@ function runTest(options: { input: string; expected: string; url?: URL }) {
   expect(output).toEqual(options.expected);
 }
 
-Deno.test("http absolute - change import sources", () => {
+test("http absolute - change import sources", () => {
   runTest({
     input: `import foo from "/foo.js"`,
     expected: `import foo from "deno-http::http://localhost/foo.js";`,
@@ -21,7 +22,7 @@ Deno.test("http absolute - change import sources", () => {
   });
 });
 
-Deno.test("http absolute - change export all sources", () => {
+test("http absolute - change export all sources", () => {
   runTest({
     input: `export * as foo from "/foo.js"`,
     expected: `export * as foo from "deno-http::http://localhost/foo.js";`,
@@ -29,7 +30,7 @@ Deno.test("http absolute - change export all sources", () => {
   });
 });
 
-Deno.test("http absolute - change export sources", () => {
+test("http absolute - change export sources", () => {
   runTest({
     input: `export { foo } from "/foo.js"`,
     expected: `export { foo } from "deno-http::http://localhost/foo.js";`,
@@ -37,7 +38,7 @@ Deno.test("http absolute - change export sources", () => {
   });
 });
 
-Deno.test("http absolute - change import()", () => {
+test("http absolute - change import()", () => {
   runTest({
     input: `import("/foo.js")`,
     expected: `import("deno-http::http://localhost/foo.js");`,

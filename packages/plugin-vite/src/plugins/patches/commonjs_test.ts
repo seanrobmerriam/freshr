@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 import { expect } from "@std/expect/expect";
 import * as babel from "@babel/core";
 import { cjsPlugin } from "../patches/commonjs.ts";
@@ -42,7 +43,7 @@ const IMPORT_REQUIRE = `import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);`;
 const EXPORT_ES_MODULE = `export var __esModule = exports.__esModule;`;
 
-Deno.test("commonjs - module.exports default", () => {
+test("commonjs - module.exports default", () => {
   runTest({
     input: `module.exports = async function () {};`,
     expected: `${INIT}
@@ -52,7 +53,7 @@ ${DEFAULT_EXPORT_END}`,
   });
 });
 
-Deno.test("commonjs - module.exports default primitive", () => {
+test("commonjs - module.exports default primitive", () => {
   runTest({
     input: `module.exports = 42;`,
     expected: `${INIT}
@@ -62,7 +63,7 @@ ${DEFAULT_EXPORT_END}`,
   });
 });
 
-Deno.test("commonjs - exports with default + named", () => {
+test("commonjs - exports with default + named", () => {
   runTest({
     input: `exports.__esModule = true;
 exports.default = 'x';
@@ -79,7 +80,7 @@ ${EXPORT_ES_MODULE}`,
   });
 });
 
-Deno.test("commonjs - module.exports with default + named", () => {
+test("commonjs - module.exports with default + named", () => {
   runTest({
     input: `module.exports.__esModule = true;
 module.exports.default = 'x';
@@ -96,7 +97,7 @@ ${EXPORT_ES_MODULE}`,
   });
 });
 
-Deno.test("commonjs - Object es module flag with named clash", () => {
+test("commonjs - Object es module flag with named clash", () => {
   runTest({
     input: `Object.defineProperty(exports, '__esModule', { value: true });
 exports.foo = 'bar';
@@ -116,7 +117,7 @@ ${EXPORT_ES_MODULE}`,
   });
 });
 
-Deno.test("commonjs - Object es module flag with named + default", () => {
+test("commonjs - Object es module flag with named + default", () => {
   runTest({
     input: `Object.defineProperty(exports, '__esModule', { value: true });
 exports.default = 'foo';
@@ -136,7 +137,7 @@ ${EXPORT_ES_MODULE}`,
   });
 });
 
-Deno.test("commonjs - esModule flag only", () => {
+test("commonjs - esModule flag only", () => {
   runTest({
     input: `Object.defineProperty(exports, "__esModule", { value: true });`,
     expected: `${INIT}
@@ -149,7 +150,7 @@ ${EXPORT_ES_MODULE}`,
   });
 });
 
-Deno.test("commonjs - esModule flag only #2", () => {
+test("commonjs - esModule flag only #2", () => {
   runTest({
     input:
       `Object.defineProperty(module.exports, "__esModule", { value: true });`,
@@ -163,7 +164,7 @@ ${EXPORT_ES_MODULE}`,
   });
 });
 
-Deno.test("commonjs - esModule flag only minified #3", () => {
+test("commonjs - esModule flag only minified #3", () => {
   runTest({
     input: `Object.defineProperty(exports, '__esModule', { value: !0 });`,
     expected: `${INIT}
@@ -176,7 +177,7 @@ ${EXPORT_ES_MODULE}`,
   });
 });
 
-Deno.test("commonjs - exports only named", () => {
+test("commonjs - exports only named", () => {
   runTest({
     input: `Object.defineProperty(exports, '__esModule', { value: true });
 exports.foo = 'bar';
@@ -197,7 +198,7 @@ ${EXPORT_ES_MODULE}`,
   });
 });
 
-Deno.test("commonjs - require", () => {
+test("commonjs - require", () => {
   runTest({
     input: `var foo = require("tape");
 console.log(foo);
@@ -208,7 +209,7 @@ console.log(foo);`,
   });
 });
 
-Deno.test("commonjs - require destructure", () => {
+test("commonjs - require destructure", () => {
   runTest({
     input: `var { foo } = require("tape");
 console.log(foo);
@@ -221,7 +222,7 @@ console.log(foo);`,
   });
 });
 
-Deno.test("commonjs - require assign", () => {
+test("commonjs - require assign", () => {
   runTest({
     input: `foo = require("tape");
 console.log(foo);
@@ -232,7 +233,7 @@ console.log(foo);`,
   });
 });
 
-Deno.test("commonjs - require assign pattern", () => {
+test("commonjs - require assign pattern", () => {
   runTest({
     input: `foo = require("tape");
 console.log(foo);
@@ -243,7 +244,7 @@ console.log(foo);`,
   });
 });
 
-Deno.test("commonjs - require function call", () => {
+test("commonjs - require function call", () => {
   runTest({
     input: `var a = require('./a')()`,
     expected: `import * as _mod from './a';
@@ -251,7 +252,7 @@ var a = (_mod.__require ?? _mod.default ?? _mod)();`,
   });
 });
 
-Deno.test("commonjs - require var decls", () => {
+test("commonjs - require var decls", () => {
   runTest({
     input: `var a = require('./a'), b = 42;`,
     expected: `import * as _mod from './a';
@@ -260,7 +261,7 @@ var a = _mod.__require ?? _mod.default ?? _mod,
   });
 });
 
-Deno.test("commonjs - duplicate exports", () => {
+test("commonjs - duplicate exports", () => {
   runTest({
     input: `Object.defineProperty(exports, "__esModule", { value: true });
 exports.trace = void 0;
@@ -279,7 +280,7 @@ ${EXPORT_ES_MODULE}`,
   });
 });
 
-Deno.test("commonjs - cleared exports", () => {
+test("commonjs - cleared exports", () => {
   runTest({
     input: `Object.defineProperty(exports, "__esModule", { value: true });
 exports.foo = exports.bar = void 0;
@@ -297,7 +298,7 @@ ${EXPORT_ES_MODULE}`,
   });
 });
 
-Deno.test("commonjs - define exports", () => {
+test("commonjs - define exports", () => {
   runTest({
     input: `var utils_1 = require("./bar");
 Object.defineProperty(exports, "foo", { enumerable: true, get: function () { return utils_1.foo; } });`,
@@ -312,7 +313,7 @@ ${DEFAULT_EXPORT_END}`,
   });
 });
 
-Deno.test("commonjs - define exports #2", () => {
+test("commonjs - define exports #2", () => {
   runTest({
     input: `var utils_1 = require("./bar");
 Object.defineProperty(exports, "foo", { enumerable: true, get() { return utils_1.foo; } });`,
@@ -327,7 +328,7 @@ ${DEFAULT_EXPORT_END}`,
   });
 });
 
-Deno.test("commonjs - define exports #3", () => {
+test("commonjs - define exports #3", () => {
   runTest({
     input: `Object.defineProperty(exports, "__esModule", { value: true });
 exports._globalThis = void 0;
@@ -346,7 +347,7 @@ ${EXPORT_ES_MODULE}`,
   });
 });
 
-Deno.test("commonjs - named function", () => {
+test("commonjs - named function", () => {
   runTest({
     input: `Object.defineProperty(exports, "__esModule", { value: true });
 function foo() {};
@@ -365,7 +366,7 @@ ${EXPORT_ES_MODULE}`,
   });
 });
 
-Deno.test("commonjs - detect esbuild shims", () => {
+test("commonjs - detect esbuild shims", () => {
   runTest({
     input: `__exportStar(require("./globalThis"), exports);`,
     expected: `${INIT}
@@ -377,7 +378,7 @@ ${DEFAULT_EXPORT_END}`,
   });
 });
 
-Deno.test("commonjs - exports.default", () => {
+test("commonjs - exports.default", () => {
   runTest({
     input: `exports.default = {}`,
     expected: `${INIT}
@@ -387,7 +388,7 @@ ${DEFAULT_EXPORT_END}`,
   });
 });
 
-Deno.test("commonjs - multiple same name", () => {
+test("commonjs - multiple same name", () => {
   runTest({
     input: `exports.VERSION = void 0;
 exports.VERSION = '1.9.0';`,
@@ -401,7 +402,7 @@ ${DEFAULT_EXPORT_END}`,
   });
 });
 
-Deno.test("commonjs - export enum", () => {
+test("commonjs - export enum", () => {
   runTest({
     input: `Object.defineProperty(exports, "__esModule", { value: true });
 exports.DiagLogLevel = void 0;
@@ -426,7 +427,7 @@ ${EXPORT_ES_MODULE}`,
   });
 });
 
-Deno.test("commonjs - require", () => {
+test("commonjs - require", () => {
   runTest({
     input: `module.exports = { __esModule: true, default: { foo: 'bar' }}`,
     expected: `${INIT}
@@ -441,7 +442,7 @@ ${DEFAULT_EXPORT_END}`,
   });
 });
 
-Deno.test("commonjs - export default object", () => {
+test("commonjs - export default object", () => {
   runTest({
     input: `Object.defineProperty(exports, '__esModule', { value: true });
 module.exports = { foo: 'bar' };
@@ -461,7 +462,7 @@ ${EXPORT_ES_MODULE}`,
   });
 });
 
-Deno.test("commonjs - detect iife wrapper", () => {
+test("commonjs - detect iife wrapper", () => {
   runTest({
     input: `;(function (sax) {
   sax.foo = "foo";
@@ -477,7 +478,7 @@ ${DEFAULT_EXPORT_END}`,
   });
 });
 
-Deno.test("commonjs - re-export", () => {
+test("commonjs - re-export", () => {
   runTest({
     input:
       `;var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
@@ -520,7 +521,7 @@ ${EXPORT_ES_MODULE}`,
   });
 });
 
-Deno.test("commonjs - assign module.exports", () => {
+test("commonjs - assign module.exports", () => {
   runTest({
     input: `module.exports = { foo: 1 };`,
     expected: `${INIT}
@@ -534,7 +535,7 @@ ${DEFAULT_EXPORT_END}`,
   });
 });
 
-Deno.test("commonjs - require non-analyzable arg", () => {
+test("commonjs - require non-analyzable arg", () => {
   runTest({
     input: `const pkg = require(path.join(basedir, "package.json"))`,
     expected: `import { createRequire } from "node:module";
@@ -543,14 +544,14 @@ const pkg = require(path.join(basedir, "package.json"));`,
   });
 });
 
-Deno.test("commonjs - keep binding", () => {
+test("commonjs - keep binding", () => {
   runTest({
     input: `export var __createBinding = Object.create ? 1 : 2;`,
     expected: `export var __createBinding = Object.create ? 1 : 2;`,
   });
 });
 
-Deno.test("commonjs - require lazy import", () => {
+test("commonjs - require lazy import", () => {
   runTest({
     input: `if (typeof process.env.NODE_PG_FORCE_NATIVE !== 'undefined') {
   module.exports = new PG(require('./native'))
@@ -614,7 +615,7 @@ ${DEFAULT_EXPORT_END}`,
   });
 });
 
-Deno.test("commonjs - wrapped iife binding", () => {
+test("commonjs - wrapped iife binding", () => {
   runTest({
     input: `"production" !== process.env.NODE_ENV && (function() {
   exports.foo = 123
@@ -630,7 +631,7 @@ ${DEFAULT_EXPORT_END}`,
   });
 });
 
-Deno.test("commonjs - re-export #2", () => {
+test("commonjs - re-export #2", () => {
   runTest({
     input: `module.exports = require("foo");`,
     expected: `${INIT}
@@ -642,7 +643,7 @@ ${DEFAULT_EXPORT_END}`,
   });
 });
 
-Deno.test("commonjs - keep require() in .mjs", () => {
+test("commonjs - keep require() in .mjs", () => {
   runTest({
     filename: "foo.mjs",
     input: `try { require("foo"); } catch {}`,
@@ -652,7 +653,7 @@ Deno.test("commonjs - keep require() in .mjs", () => {
   });
 });
 
-Deno.test("commonjs - keep conditional require() in ESM file", () => {
+test("commonjs - keep conditional require() in ESM file", () => {
   runTest({
     filename: "foo.mjs",
     input: `try { require("foo"); } catch {};
@@ -664,7 +665,7 @@ export {};`,
   });
 });
 
-Deno.test("commonjs - CJS turned ESM module", () => {
+test("commonjs - CJS turned ESM module", () => {
   runTest({
     filename: "foo.mjs",
     input: `module.exports.create = confettiCannon;
@@ -676,7 +677,7 @@ export var create = module.exports.create;`,
   });
 });
 
-Deno.test("commonjs - minified __esModule", () => {
+test("commonjs - minified __esModule", () => {
   runTest({
     filename: "foo.js",
     input: `
@@ -695,7 +696,7 @@ export var __esModule = exports.__esModule;`,
   });
 });
 
-Deno.test("commonjs - esbuild __importDefault", () => {
+test("commonjs - esbuild __importDefault", () => {
   runTest({
     input:
       `var __importDefault = (this && this.__importDefault) || function (mod) {
@@ -717,7 +718,7 @@ const node_events_1 = __importDefault({
 
 // --- New tests for CJS transform fixes ---
 
-Deno.test("commonjs - require.resolve injects createRequire", () => {
+test("commonjs - require.resolve injects createRequire", () => {
   runTest({
     input: `var resolved = require.resolve("some-package");`,
     expected: `${IMPORT_REQUIRE}
@@ -725,7 +726,7 @@ var resolved = require.resolve("some-package");`,
   });
 });
 
-Deno.test("commonjs - require.resolve with require() both inject createRequire once", () => {
+test("commonjs - require.resolve with require() both inject createRequire once", () => {
   runTest({
     input: `var resolved = require.resolve("some-package");
 if (true) {
@@ -739,7 +740,7 @@ if (true) {
   });
 });
 
-Deno.test("commonjs - .mts file treated as ESM", () => {
+test("commonjs - .mts file treated as ESM", () => {
   runTest({
     filename: "foo.mts",
     input: `export const x = 1;`,
@@ -747,7 +748,7 @@ Deno.test("commonjs - .mts file treated as ESM", () => {
   });
 });
 
-Deno.test("commonjs - .cts file treated as CJS", () => {
+test("commonjs - .cts file treated as CJS", () => {
   runTest({
     filename: "foo.cts",
     input: `module.exports = 42;`,
@@ -758,7 +759,7 @@ ${DEFAULT_EXPORT_END}`,
   });
 });
 
-Deno.test("commonjs - __dirname and __filename polyfill", () => {
+test("commonjs - __dirname and __filename polyfill", () => {
   const DIRNAME_IMPORT =
     `import { fileURLToPath as __cjs_fileURLToPath } from "node:url";
 import { dirname as __cjs_dirname } from "node:path";
@@ -784,7 +785,7 @@ ${DEFAULT_EXPORT_END}`,
   });
 });
 
-Deno.test("commonjs - module.exports.X tracked as named export", () => {
+test("commonjs - module.exports.X tracked as named export", () => {
   runTest({
     input: `module.exports = function parse() {};
 module.exports.parse = module.exports;
@@ -801,7 +802,7 @@ ${DEFAULT_EXPORT_END}`,
   });
 });
 
-Deno.test("commonjs imitating esm - default export exists", () => {
+test("commonjs imitating esm - default export exists", () => {
   runTest({
     input: `module.exports = {
   'default': 'string',
@@ -820,7 +821,7 @@ ${DEFAULT_EXPORT_END}`,
   });
 });
 
-Deno.test("commonjs - primitive module.exports with namespace re-export guards assignment", () => {
+test("commonjs - primitive module.exports with namespace re-export guards assignment", () => {
   runTest({
     input: `__exportStar(require("./utils"), exports);
 module.exports = "RFC3986";`,

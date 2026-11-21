@@ -1,0 +1,26 @@
+{
+  "name": "@fresh/www",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "bun _fresh/server.js",
+    "dev": "bun --bun vite",
+    "build": "bun --bun vite build"
+  },
+  "dependencies": {
+    "@fresh/plugin-vite": "workspace:packages/plugin-vite",
+    "@tailwindcss/vite": "^4.1.12",
+    "docsearch": "npm:@docsearch/js@^3.5.2",
+    "fresh": "workspace:packages/fresh",
+    "github-slugger": "^2.0.0",
+    "imagescript": "^1.3.0",
+    "marked": "^15.0.11",
+    "marked-mangle": "^1.1.9",
+    "prismjs": "^1.29.0",
+    "vite": "^7.3.1",
+    "vite-plugin-inspect": "^11.3.2"
+  },
+  "devDependencies": {
+    "playwright": "1.63.0"
+  }
+}

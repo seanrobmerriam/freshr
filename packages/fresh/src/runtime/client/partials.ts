@@ -196,7 +196,8 @@ document.addEventListener("click", async (e) => {
   }
 });
 
-addEventListener("popstate", async (e) => {
+addEventListener("popstate", async (ev) => {
+  const e = ev as PopStateEvent;
   // When state is `null` then the browser navigated to a document
   // fragment. In this case we do nothing.
   if (e.state === null) {

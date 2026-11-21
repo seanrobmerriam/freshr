@@ -1,4 +1,5 @@
 import * as path from "@std/path";
+import { openFile } from "./server.ts";
 import type { Command } from "./commands.ts";
 import { fsItemsToCommands, type FsRouteFile } from "./fs_routes.ts";
 import type { ServerIslandRegistry } from "./context.ts";
@@ -86,15 +87,12 @@ export class ProdBuildCache<State> implements BuildCache<State> {
       ? info.filePath
       : path.join(this.root, info.filePath);
 
-    const [stat, file] = await Promise.all([
-      Deno.stat(filePath),
-      Deno.open(filePath),
-    ]);
+    const file = await openFile(filePath);
 
     return {
       hash: info.hash,
       contentType: info.contentType,
-      size: stat.size,
+      size: file.size,
       readable: file.readable,
       close: () => file.close(),
       immutable: info.immutable,

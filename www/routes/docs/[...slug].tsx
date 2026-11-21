@@ -1,3 +1,4 @@
+import * as fsp from "node:fs/promises";
 import { HttpError, page } from "fresh";
 import { asset, Partial } from "fresh/runtime";
 import { SidebarCategory } from "../../components/DocsSidebar.tsx";
@@ -124,7 +125,7 @@ export const handler = define.handlers<Data>({
     const url = (import.meta as any).env.PROD
       ? new URL(`../${entry.file}`, import.meta.url)
       : new URL(`../../../${entry.file}`, import.meta.url);
-    const fileContent = await Deno.readTextFile(url);
+    const fileContent = await fsp.readFile(url, "utf-8");
     const { body, attrs } = frontMatter<Record<string, unknown>>(fileContent);
 
     ctx.state.title = `${entry.title ?? "Not Found"} | Fresh docs`;
@@ -174,8 +175,7 @@ export default define.page<typeof handler>(function DocsPage(props) {
                 strokeLinejoin="round"
                 strokeWidth="2"
                 d="M4 6h16M4 12h16M4 18h7"
-              >
-              </path>
+              ></path>
             </svg>
             <div>Table of Contents</div>
           </label>

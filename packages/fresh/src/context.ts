@@ -7,6 +7,7 @@ import {
   isValidElement,
   type VNode,
 } from "preact";
+import { type ServeHandlerInfo, upgradeWebSocket } from "./server.ts";
 import { jsxTemplate } from "preact/jsx-runtime";
 import { SpanStatusCode } from "@opentelemetry/api";
 import type { ResolvedFreshConfig } from "./config.ts";
@@ -48,7 +49,7 @@ export interface WebSocketHandlers {
 }
 
 /**
- * Options forwarded to `Deno.upgradeWebSocket()`.
+ * Options used when upgrading a request to a WebSocket.
  */
 export interface WebSocketUpgradeOptions {
   /** Automatically close the connection if no ping is received
@@ -60,20 +61,21 @@ export interface WebSocketUpgradeOptions {
 
 /**
  * Side channel used by `@fresh/plugin-vite` (and any other adapter sitting on
- * top of `node:http`) to hand a raw socket + buffered head to `ctx.upgrade()`.
- * `Deno.upgradeWebSocket()` normally pulls these off the request handled by
- * `Deno.serve`, but a request synthesized from `node:http` carries neither, so
- * the adapter stashes them here and `ctx.upgrade()` forwards them to Deno.
+ * top of `node:http`) to hand a raw socket + buffered head + the original
+ * `IncomingMessage` to `ctx.upgrade()`. A request served by `Bun.serve()` is
+ * upgraded through the Bun server, but a request synthesized from `node:http`
+ * isn't, so the adapter stashes the raw pieces here and `ctx.upgrade()`
+ * completes the handshake with the `ws` package.
  *
  * Stored on `globalThis` so a single WeakMap is shared even when this module
- * is evaluated more than once (e.g. once by Deno for the Vite plugin and once
- * by Vite's SSR runner for the user's server code).
+ * is evaluated more than once (e.g. once for the Vite plugin and once by
+ * Vite's SSR runner for the user's server code).
  */
 const UPGRADE_SOURCE_KEY: unique symbol = Symbol.for(
   "fresh.upgradeSourceMap",
 ) as typeof UPGRADE_SOURCE_KEY;
 // deno-lint-ignore no-explicit-any
-type UpgradeSource = { socket: any; head: any };
+type UpgradeSource = { socket: any; head: any; req?: any };
 // deno-lint-ignore no-explicit-any
 const globalAny = globalThis as any;
 export const upgradeSourceMap: WeakMap<Request, UpgradeSource> =
@@ -166,7 +168,7 @@ export class Context<State> {
   data: unknown = undefined;
   /** Error value if an error was caught (Default: null) */
   error: unknown | null = null;
-  readonly info: Deno.ServeHandlerInfo;
+  readonly info: ServeHandlerInfo;
   /**
    * Whether the current Request is a partial request.
    *
@@ -232,7 +234,7 @@ export class Context<State> {
   constructor(
     req: Request,
     url: URL,
-    info: Deno.ServeHandlerInfo,
+    info: ServeHandlerInfo,
     route: string | null,
     params: Record<string, string>,
     config: ResolvedFreshConfig,
@@ -511,7 +513,11 @@ export class Context<State> {
    * ```
    */
   text(content: string, init?: ResponseInit): Response {
-    return new Response(content, init);
+    const headers = getHeadersFromInit(init);
+    if (!headers.has("Content-Type")) {
+      headers.set("Content-Type", "text/plain;charset=UTF-8");
+    }
+    return new Response(content, { ...init, headers });
   }
 
   /**
@@ -536,7 +542,11 @@ export class Context<State> {
    */
   // deno-lint-ignore no-explicit-any
   json(content: any, init?: ResponseInit): Response {
-    return Response.json(content, init);
+    const headers = getHeadersFromInit(init);
+    if (!headers.has("Content-Type")) {
+      headers.set("Content-Type", "application/json");
+    }
+    return Response.json(content, { ...init, headers });
   }
 
   /**
@@ -572,7 +582,9 @@ export class Context<State> {
   ): Response {
     const raw = typeof stream === "function" ? stream() : stream;
 
-    const body = ReadableStream.from(raw)
+    // `ReadableStream.from()` is missing from some lib typings
+    // deno-lint-ignore no-explicit-any
+    const body = ((ReadableStream as any).from(raw) as ReadableStream<unknown>)
       .pipeThrough(
         new TransformStream({
           transform(chunk, controller) {
@@ -645,14 +657,13 @@ export class Context<State> {
 
     const source = upgradeSourceMap.get(this.req);
     if (source !== undefined) upgradeSourceMap.delete(this.req);
-    const upgradeOptions = source
-      ? { ...options, socket: source.socket, head: source.head }
-      : options;
-    const { socket, response } = Deno.upgradeWebSocket(
+    const { socket: freshSocket, response } = upgradeWebSocket(
       this.req,
-      // deno-lint-ignore no-explicit-any
-      upgradeOptions as any,
+      this.info,
+      options,
+      source,
     );
+    const socket = freshSocket as unknown as WebSocket;
 
     if (handlers === undefined) {
       return { socket, response };

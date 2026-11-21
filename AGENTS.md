@@ -2,8 +2,10 @@
 
 ## Repository Overview
 
-Fresh is a web framework for Deno built on Preact. This is a **Deno monorepo**
-with workspace members in `packages/*` and `www/`.
+Fresh is a web framework built on Preact. This fork runs on **Bun** instead of
+Deno. This is a **Bun workspace monorepo** (see the root `package.json`) with
+workspace members in `packages/*` and `www/`. Packages from JSR (`@std/*`) are
+installed through JSR's npm registry, configured in `.npmrc`.
 
 ### Packages
 
@@ -11,10 +13,11 @@ with workspace members in `packages/*` and `www/`.
   islands, build cache, middlewares, and client/server runtime.
 - **`packages/plugin-vite/`** (`@fresh/plugin-vite`): Vite integration plugin
   with dev server, SSR/client builds, and HMR.
-- **`packages/init/`** (`@fresh/init`): Project scaffolding
-  (`deno run -Ar jsr:@fresh/init`).
+- **`packages/init/`** (`@fresh/init`): Project scaffolding (`bunx
+  @fresh/init`).
 - **`packages/update/`** (`@fresh/update`): Automated Fresh 1.x to 2.x migration
-  tool using ts-morph for AST transforms.
+  tool using ts-morph for AST transforms. Also migrates `deno.json` projects to
+  `package.json` + `tsconfig.json`.
 - **`packages/build-id/`** (`@fresh/build-id`): Build/deployment ID generation.
 - **`packages/plugin-tailwindcss/`** (`@fresh/plugin-tailwind`): TailwindCSS v4
   plugin.
@@ -29,40 +32,42 @@ with workspace members in `packages/*` and `www/`.
 - **`docs/`**: Markdown documentation organized by version (`latest/`, `1.x/`,
   `canary/`).
 - **`tools/`**: `release.ts` (version bumping), `check_docs.ts` (doc
-  validation), `check_links.ts` (link checker).
-- **`vendor/`**: Vendored dependencies (`"vendor": true` in deno.json).
+  validation), `check_links.ts` (link checker), `fmt.ts` (formatter, same dprint
+  plugins and settings as `deno fmt`), `test_setup.ts` (test preload).
 
 ## Git Workflow
 
 - To check out a PR branch, use `gh pr checkout <pr-number>`. Do not set up
   remotes manually.
-- Always run `deno fmt` before pushing.
-- Do not commit `deno.lock` changes unless the PR is specifically about updating
-  dependencies. Lockfile diffs tend to be noisy and environment-specific.
+- Always run `bun run fmt` before pushing.
+- Do not commit `bun.lock` changes unless the PR is specifically about updating
+  dependencies.
 - **Never amend commits or force push.** Always create new commits.
 
 ## Development
 
-- Run `deno task ok` before pushing — it runs the full local CI check (fmt,
-  lint, type check, tests).
-- Run `deno install` if you get missing dependency errors.
-- Tests: `deno task test` (all tests, parallel). Tests use `@std/expect` for
-  assertions and `linkedom` for DOM testing.
-- JSX is configured in "precompile" mode with Preact as the import source.
-
-### Lockfile quirks
-
-The lockfile contains remote specifiers pointing to `refs/heads/main` (e.g.
-`raw.githubusercontent.com/.../refs/heads/main/...`). These hashes go stale when
-upstream pushes. When that happens, manually update the hash in `deno.lock`
-since `deno cache --reload` cannot fix it (see
-https://github.com/denoland/deno/issues/32991).
+- Run `bun run ok` before pushing — it runs the full local CI check (format
+  check, type check, tests).
+- Run `bun install` if you get missing dependency errors, and `bunx playwright
+  install chromium` for the browser based tests.
+- Tests: `bun run test` (all tests). Tests use `bun:test` with `@std/expect` for
+  assertions, `linkedom` for DOM testing and Playwright (through a small Astral
+  compatible wrapper in `packages/fresh/tests/browser.ts`) for browser tests.
+- JSX uses `"jsx": "react-jsx"` with Preact as the import source
+  (`tsconfig.json`). Bun only reads the `tsconfig.json` of the working
+  directory, so `.tsx` files that are published in a package carry a `/**
+  @jsxImportSource preact */` pragma.
+- Runtime specific code lives in `packages/fresh/src/server.ts`: `Bun.serve()`
+  wrapper, WebSocket upgrades, file streaming and error helpers. Prefer `node:`
+  APIs elsewhere so that code also runs inside Vite's SSR runner.
 
 ## Architecture
 
 ### Request lifecycle
 
-1. `App.handler()` receives an HTTP request (`app.ts`)
+1. `App.handler()` receives an HTTP request (`app.ts`). Under `Bun.serve()` the
+   second argument is the Bun server, which is normalized into `ctx.info:
+   ServeHandlerInfo`
 2. URL is parsed and normalized (double slashes removed)
 3. `UrlPatternRouter.match()` finds the matching route — static routes are
    checked first via direct `Map` lookup, then dynamic routes via `URLPattern`
@@ -117,7 +122,7 @@ Two build paths exist:
 
 - **esbuild-based** (`dev/builder.ts`, `dev/esbuild.ts`): The native Fresh
   builder. Discovers islands, creates entry points per island + a
-  `fresh-runtime` entry, bundles with esbuild-wasm (splitting, tree-shaking, ESM
+  `fresh-runtime` entry, bundles with esbuild (splitting, tree-shaking, ESM
   output). Output goes to `/_fresh/js/{BUILD_ID}/`.
 - **Vite-based** (`plugin-vite/`): Uses Vite's environment API for dual
   client/SSR builds. Provides the same island discovery and bundling through
@@ -141,16 +146,17 @@ page loads.
 
 ## CI
 
-CI runs on every PR against `main` across a matrix of Deno v2.x + canary on
+CI runs on every PR against `main` across a matrix of Bun latest + canary on
 macOS, Windows, and Ubuntu. Steps:
 
-1. `deno install`
-2. `deno fmt --check` (Ubuntu + v2.x only)
-3. `deno lint` (Ubuntu + v2.x only)
-4. Spell-check via `typos` (Ubuntu + v2.x only)
-5. `deno task check:types` (all platforms)
-6. `deno task test` (all platforms)
-7. `deno task check:docs` (all platforms)
-8. `deno task build-www` (Ubuntu + v2.x only)
+1. `bun install --frozen-lockfile`
+2. `bunx playwright install --with-deps chromium`
+3. `bun run fmt:check` (Ubuntu + latest only)
+4. Spell-check via `typos` (Ubuntu + latest only)
+5. `bun run check:types` (all platforms)
+6. `bun run test` (all platforms)
+7. `bun run check:docs` (all platforms)
+8. `bun run build-www` and `bun run check:links` (Ubuntu + latest only)
 
-Publishing to JSR happens automatically on push to `main` via `deno publish`.
+Publishing is a manual workflow (`.github/workflows/publish.yml`) that defaults
+to a dry run.

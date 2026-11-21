@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 import { staticFiles } from "./static_files.ts";
 import { FakeServer, serveMiddleware } from "../test_utils.ts";
 import type { BuildCache, StaticFile } from "../build_cache.ts";
@@ -51,7 +52,7 @@ class MockBuildCache implements BuildCache {
   }
 }
 
-Deno.test("static files - 200", async () => {
+test("static files - 200", async () => {
   const buildCache = new MockBuildCache({
     "foo.css": { content: "body {}", hash: null },
   });
@@ -71,7 +72,7 @@ Deno.test("static files - 200", async () => {
   expect(content).toEqual("body {}");
 });
 
-Deno.test("static files - HEAD 200", async () => {
+test("static files - HEAD 200", async () => {
   const buildCache = new MockBuildCache({
     "foo.css": { content: "body {}", hash: null },
   });
@@ -88,7 +89,7 @@ Deno.test("static files - HEAD 200", async () => {
   expect(content).toEqual("");
 });
 
-Deno.test("static files - etag in production", async () => {
+test("static files - etag in production", async () => {
   const buildCache = new MockBuildCache({
     "foo.css": { content: "body {}", hash: "123" },
   });
@@ -123,7 +124,7 @@ Deno.test("static files - etag in production", async () => {
   expect(res.status).toEqual(304);
 });
 
-Deno.test("static files - no etag in development", async () => {
+test("static files - no etag in development", async () => {
   const buildCache = new MockBuildCache({
     "foo.css": { content: "body {}", hash: "123" },
   });
@@ -153,7 +154,7 @@ Deno.test("static files - no etag in development", async () => {
   expect(res.status).toEqual(200);
 });
 
-Deno.test("static files - 404 on missing favicon.ico", async () => {
+test("static files - 404 on missing favicon.ico", async () => {
   const buildCache = new MockBuildCache({});
   const server = serveMiddleware(
     staticFiles(),
@@ -164,7 +165,7 @@ Deno.test("static files - 404 on missing favicon.ico", async () => {
   expect(res.status).toEqual(404);
 });
 
-Deno.test("static files - 405 on wrong HTTP method", async () => {
+test("static files - 405 on wrong HTTP method", async () => {
   const buildCache = new MockBuildCache({
     "foo.css": { content: "body {}", hash: null },
   });
@@ -181,7 +182,7 @@ Deno.test("static files - 405 on wrong HTTP method", async () => {
   }
 });
 
-Deno.test("static files - disables caching in development", async () => {
+test("static files - disables caching in development", async () => {
   const buildCache = new MockBuildCache({
     "foo.css": { content: "body {}", hash: null },
   });
@@ -206,7 +207,7 @@ Deno.test("static files - disables caching in development", async () => {
   );
 });
 
-Deno.test("static files - enables caching in production", async () => {
+test("static files - enables caching in production", async () => {
   const buildCache = new MockBuildCache({
     "foo.css": { content: "body {}", hash: null },
   });
@@ -231,7 +232,7 @@ Deno.test("static files - enables caching in production", async () => {
   );
 });
 
-Deno.test("static files - encoded pathname", async () => {
+test("static files - encoded pathname", async () => {
   // Build cache stores URL-encoded paths (matching what prepareStaticFile produces)
   const fileKeys = ["C#.svg", "西安市.png", "인천.avif"];
   const entries = Object.fromEntries(
@@ -260,7 +261,7 @@ Deno.test("static files - encoded pathname", async () => {
   }
 });
 
-Deno.test("static files - fallthrough", async () => {
+test("static files - fallthrough", async () => {
   const buildCache = new MockBuildCache({
     "foo.css": { content: "body {}", hash: null },
   });
@@ -297,7 +298,7 @@ Deno.test("static files - fallthrough", async () => {
   expect(called).toEqual(["before", "after"]);
 });
 
-Deno.test("static files - comma in pathname", async () => {
+test("static files - comma in pathname", async () => {
   const key = systemPathToUrlEncoded("foo,bar.css");
 
   const buildCache = new MockBuildCache({

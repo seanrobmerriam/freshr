@@ -1,3 +1,4 @@
+import { afterAll, beforeAll } from "bun:test";
 import {
   withBrowser,
   withChildProcessServer,
@@ -12,11 +13,11 @@ import { integrationTest } from "../packages/fresh/src/test_utils.ts";
 
 let result: Awaited<ReturnType<typeof buildVite>>;
 
-Deno.test.beforeAll(async () => {
+beforeAll(async () => {
   result = await buildVite(import.meta.dirname!);
 });
 
-Deno.test.afterAll(async () => {
+afterAll(async () => {
   await result?.[Symbol.asyncDispose]();
 });
 
@@ -36,7 +37,8 @@ integrationTest("shows version selector", async () => {
     await withChildProcessServer(
       {
         cwd: result.tmp,
-        args: ["serve", "-A", "--port", "0", "_fresh/server.js"],
+        args: ["_fresh/server.js"],
+        env: { PORT: "0" },
       },
       async (address) => {
         await withBrowser(async (page) => {

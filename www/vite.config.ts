@@ -1,8 +1,8 @@
+import * as fsp from "node:fs/promises";
 import { defineConfig, type Plugin } from "vite";
 import { fresh } from "@fresh/plugin-vite";
 import tailwindcss from "@tailwindcss/vite";
 import inspect from "vite-plugin-inspect";
-import { copy } from "@std/fs";
 import * as path from "@std/path";
 import { pathWithRoot } from "../packages/plugin-vite/src/utils.ts";
 
@@ -34,20 +34,15 @@ function copyDocs(): Plugin {
         const target = path.join(serverOutDir, "docs", branch);
 
         try {
-          await Deno.remove(target, { recursive: true });
+          await fsp.rm(target, { recursive: true, force: true });
         } catch (err) {
-          if (!(err instanceof Deno.errors.NotFound)) {
+          if (!((err as NodeJS.ErrnoException)?.code === "ENOENT")) {
             throw err;
           }
         }
 
-        try {
-          await Deno.mkdir(path.dirname(target), { recursive: true });
-        } catch {
-          // Ignore
-        }
-
-        await copy(source, target);
+        await fsp.mkdir(path.dirname(target), { recursive: true });
+        await fsp.cp(source, target, { recursive: true });
       }
     },
   };

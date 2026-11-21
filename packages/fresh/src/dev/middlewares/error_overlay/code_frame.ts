@@ -1,3 +1,4 @@
+import * as fs from "node:fs";
 import * as path from "@std/path";
 
 function tabs2Spaces(str: string) {
@@ -117,7 +118,7 @@ export function getCodeFrame(stack: string, rootDir: string) {
   if (file) {
     try {
       const filePath = path.fromFileUrl(file.file);
-      const text = Deno.readTextFileSync(filePath);
+      const text = fs.readFileSync(filePath, "utf-8");
       return createCodeFrame(
         text,
         file.line - 1,

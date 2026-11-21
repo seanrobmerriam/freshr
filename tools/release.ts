@@ -1,12 +1,13 @@
+import * as fsp from "node:fs/promises";
 import * as cl from "@std/fmt/colors";
 import * as path from "@std/path";
-import type { DenoJson } from "../packages/update/src/update.ts";
+import type { PackageJson } from "../packages/update/src/update.ts";
 import * as semver from "@std/semver";
 
 function showHelp() {
   // deno-lint-ignore no-console
   console.log(`
-  Usage: deno run -A release.ts <major|minor|patch|...>
+  Usage: bun tools/release.ts <major|minor|patch|...>
 `);
 }
 
@@ -14,23 +15,25 @@ function exitError(msg: string): never {
   // deno-lint-ignore no-console
   console.error(cl.red(msg));
   showHelp();
-  Deno.exit(1);
+  process.exit(1);
 }
 
-if (Deno.args.length === 0) {
+if (process.argv.slice(2).length === 0) {
   exitError(`Missing version argument.`);
-} else if (Deno.args.length > 1) {
+} else if (process.argv.slice(2).length > 1) {
   exitError(`Too many arguments. Expected only one release argument`);
 }
 
 const ROOT_DIR = path.join(import.meta.dirname!, "..");
-const denoJsonPath = path.join(ROOT_DIR, "packages", "fresh", "deno.json");
-const wwwDenoJsonPath = path.join(ROOT_DIR, "www", "deno.json");
-const denoJson = JSON.parse(await Deno.readTextFile(denoJsonPath)) as DenoJson;
+const corePkgPath = path.join(ROOT_DIR, "packages", "fresh", "package.json");
+const rootPkgPath = path.join(ROOT_DIR, "package.json");
+const corePkg = JSON.parse(
+  await fsp.readFile(corePkgPath, "utf-8"),
+) as PackageJson;
 
-const version = Deno.args[0];
-const current = semver.parse(denoJson.version!);
-const next = semver.parse(denoJson.version!);
+const version = process.argv.slice(2)[0];
+const current = semver.parse(corePkg.version!);
+const next = semver.parse(corePkg.version!);
 if (version === "major") {
   next.major++;
   next.minor = 0;
@@ -55,8 +58,8 @@ if (version === "major") {
   }
 }
 
-const updateJsonPath = path.join(ROOT_DIR, "packages", "update", "deno.json");
-const updateJson = JSON.parse(await Deno.readTextFile(updateJsonPath));
+const updatePkgPath = path.join(ROOT_DIR, "packages", "update", "package.json");
+const updateJson = JSON.parse(await fsp.readFile(updatePkgPath, "utf-8"));
 const currentUpdate = semver.parse(updateJson.version);
 
 function formatUpgradeMsg(
@@ -72,27 +75,28 @@ function formatUpgradeMsg(
 }
 
 // deno-lint-ignore no-console
-console.log(formatUpgradeMsg(denoJson.name!, current, next));
+console.log(formatUpgradeMsg(corePkg.name!, current, next));
 // deno-lint-ignore no-console
 console.log(formatUpgradeMsg(updateJson.name!, currentUpdate, next));
 
 if (!confirm("Proceed with update?")) {
-  Deno.exit(0);
+  process.exit(0);
 }
 
-const denoTailwindJson = JSON.parse(
-  await Deno.readTextFile(
-    path.join(ROOT_DIR, "packages", "plugin-tailwindcss", "deno.json"),
+const tailwindPkg = JSON.parse(
+  await fsp.readFile(
+    path.join(ROOT_DIR, "packages", "plugin-tailwindcss", "package.json"),
+    "utf-8",
   ),
-) as DenoJson;
+) as PackageJson;
 
 async function replaceInFile(
   file: string,
   replacer: (content: string) => string,
 ) {
-  const raw = await Deno.readTextFile(file);
+  const raw = await fsp.readFile(file, "utf-8");
   const replaced = replacer(raw);
-  await Deno.writeTextFile(file, replaced);
+  await fsp.writeFile(file, replaced);
 }
 
 const nextVersion = semver.format(next);
@@ -101,8 +105,8 @@ function replaceJsonVersion(version: string) {
   return (content: string) =>
     content.replace(/"version":\s"[^"]+"/, `"version": "${version}"`);
 }
-await replaceInFile(denoJsonPath, replaceJsonVersion(nextVersion));
-await replaceInFile(updateJsonPath, replaceJsonVersion(nextVersion));
+await replaceInFile(corePkgPath, replaceJsonVersion(nextVersion));
+await replaceInFile(updatePkgPath, replaceJsonVersion(nextVersion));
 
 async function getNpmVersion(name: string) {
   const res = await fetch(`https://registry.npmjs.org/${name}`, {
@@ -128,7 +132,7 @@ function updateVersions(content: string): string {
     )
     .replace(
       /FRESH_TAILWIND_VERSION\s=\s["']([^'"]+)['"]/g,
-      `FRESH_TAILWIND_VERSION = "${denoTailwindJson.version!}"`,
+      `FRESH_TAILWIND_VERSION = "${tailwindPkg.version!}"`,
     )
     .replace(
       /PREACT_VERSION\s=\s["']([^'"]+)['"]/g,
@@ -146,36 +150,23 @@ function updateVersions(content: string): string {
   return replaced;
 }
 
-function replaceDepVersion(
-  registry: "jsr" | "npm",
-  name: string,
-  version: string,
-) {
+function replaceDepVersion(name: string, version: string) {
   return (content: string) => {
     return content.replace(
-      new RegExp(`"${name}":\\s"[^"]+"`),
-      `"${name}": "${registry}:${name}@^${version}"`,
+      new RegExp(`"${name.replace("/", "\\/")}":\\s"[^"]+"`),
+      `"${name}": "^${version}"`,
     );
   };
 }
 
 // Update preact + @preact/signals version
-await replaceInFile(
-  denoJsonPath,
-  replaceDepVersion("npm", "preact", preactVersion),
-);
-await replaceInFile(
-  denoJsonPath,
-  replaceDepVersion("npm", "@preact/signals", preactSignalsVersion),
-);
-await replaceInFile(
-  wwwDenoJsonPath,
-  replaceDepVersion("npm", "preact", preactVersion),
-);
-await replaceInFile(
-  wwwDenoJsonPath,
-  replaceDepVersion("npm", "@preact/signals", preactSignalsVersion),
-);
+for (const pkgPath of [corePkgPath, rootPkgPath]) {
+  await replaceInFile(pkgPath, replaceDepVersion("preact", preactVersion));
+  await replaceInFile(
+    pkgPath,
+    replaceDepVersion("@preact/signals", preactSignalsVersion),
+  );
+}
 
 const updateScriptPath = path.join(
   ROOT_DIR,

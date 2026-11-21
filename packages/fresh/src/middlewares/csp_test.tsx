@@ -1,10 +1,11 @@
+import { test } from "bun:test";
 import { expect } from "@std/expect/expect";
 import { App } from "../app.ts";
 import { csp } from "./csp.ts";
 import { FakeServer } from "../test_utils.ts";
 import { NONCE_SYMBOL } from "./csp.ts";
 
-Deno.test("CSP - GET default", async () => {
+test("CSP - GET default", async () => {
   const handler = new App()
     .use(csp())
     .get("/", () => new Response("ok"))
@@ -17,7 +18,7 @@ Deno.test("CSP - GET default", async () => {
   );
 });
 
-Deno.test("CSP - GET with override options", async () => {
+test("CSP - GET with override options", async () => {
   const handler = new App()
     .use(csp({
       reportTo: "/api/csp-reports",
@@ -51,7 +52,7 @@ Deno.test("CSP - GET with override options", async () => {
   expect(styleSrcCount).toBe(1);
 });
 
-Deno.test("CSP - user directives override defaults", async () => {
+test("CSP - user directives override defaults", async () => {
   const handler = new App()
     .use(csp({
       csp: [
@@ -72,7 +73,7 @@ Deno.test("CSP - user directives override defaults", async () => {
   expect(imgSrcCount).toBe(1);
 });
 
-Deno.test("CSP - GET report only", async () => {
+test("CSP - GET report only", async () => {
   const handler = new App()
     .use(csp({
       reportOnly: true,
@@ -88,7 +89,7 @@ Deno.test("CSP - GET report only", async () => {
   );
 });
 
-Deno.test("CSP - useNonce replaces unsafe-inline with nonce", async () => {
+test("CSP - useNonce replaces unsafe-inline with nonce", async () => {
   const app = new App()
     .use(csp({ useNonce: true }))
     .get("/", (ctx) => {
@@ -124,7 +125,7 @@ Deno.test("CSP - useNonce replaces unsafe-inline with nonce", async () => {
   expect(html).toContain(`nonce="${nonce}"`);
 });
 
-Deno.test("CSP - useNonce injects nonce on inline script tags", async () => {
+test("CSP - useNonce injects nonce on inline script tags", async () => {
   const app = new App()
     .use(csp({ useNonce: true }))
     .get("/", (ctx) => {
@@ -151,7 +152,7 @@ Deno.test("CSP - useNonce injects nonce on inline script tags", async () => {
   expect(html).toContain(`nonce="${nonce}"`);
 });
 
-Deno.test("CSP - useNonce with non-rendered response falls back to unsafe-inline", async () => {
+test("CSP - useNonce with non-rendered response falls back to unsafe-inline", async () => {
   const app = new App()
     .use(csp({ useNonce: true }))
     .get("/api", () => new Response(JSON.stringify({ ok: true })));
@@ -165,7 +166,7 @@ Deno.test("CSP - useNonce with non-rendered response falls back to unsafe-inline
   expect(cspHeader).toContain("'unsafe-inline'");
 });
 
-Deno.test("CSP - useNonce generates unique nonce per request", async () => {
+test("CSP - useNonce generates unique nonce per request", async () => {
   const app = new App()
     .use(csp({ useNonce: true }))
     .get("/", (ctx) => {
@@ -193,7 +194,7 @@ Deno.test("CSP - useNonce generates unique nonce per request", async () => {
   expect(nonce1).not.toEqual(nonce2);
 });
 
-Deno.test("CSP - existing nonce on tag is preserved", async () => {
+test("CSP - existing nonce on tag is preserved", async () => {
   const app = new App()
     .use(csp({ useNonce: true }))
     .get("/", (ctx) => {
@@ -215,7 +216,7 @@ Deno.test("CSP - existing nonce on tag is preserved", async () => {
   expect(html).toContain('nonce="custom-nonce"');
 });
 
-Deno.test("CSP - nonce does not leak as header without CSP middleware", async () => {
+test("CSP - nonce does not leak as header without CSP middleware", async () => {
   const app = new App()
     .get("/", (ctx) => {
       return ctx.render(
@@ -237,7 +238,7 @@ Deno.test("CSP - nonce does not leak as header without CSP middleware", async ()
   expect((res as any)[NONCE_SYMBOL]).toBeDefined();
 });
 
-Deno.test("CSP - useNonce replaces unsafe-inline in default-src", async () => {
+test("CSP - useNonce replaces unsafe-inline in default-src", async () => {
   const app = new App()
     .use(csp({
       useNonce: true,

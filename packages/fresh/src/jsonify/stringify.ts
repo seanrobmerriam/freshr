@@ -8,6 +8,11 @@ import {
   ZERO_NEG,
 } from "./constants.ts";
 
+// `Temporal` isn't part of TypeScript's standard lib yet and isn't available
+// in every runtime. Access it through `globalThis` so it's optional.
+// deno-lint-ignore no-explicit-any
+const Temporal: any = (globalThis as any).Temporal;
+
 export type Stringifiers = Record<
   string,
   // deno-lint-ignore no-explicit-any

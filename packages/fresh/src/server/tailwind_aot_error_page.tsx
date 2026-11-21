@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 const LINK = "https://usefresh.dev/docs/concepts/ahead-of-time-builds";
 
 export default function TailwindErrorPage() {

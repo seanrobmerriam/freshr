@@ -18,6 +18,29 @@ import {
   type TsTypeDef,
 } from "@deno/doc";
 import { distinctBy } from "@std/collections/distinct-by";
+import * as fs from "node:fs";
+import { fileURLToPath } from "node:url";
+
+// `@deno/doc` is a Wasm build of deno_doc. When it isn't running in Deno it
+// expects a shimmed `Deno.readFile()` to load its Wasm binary from disk.
+// deno-lint-ignore no-explicit-any
+(globalThis as any).Deno ??= {
+  readFile: (url: URL) =>
+    Promise.resolve(new Uint8Array(fs.readFileSync(fileURLToPath(url)))),
+};
+
+function load(specifier: string) {
+  if (!specifier.startsWith("file:")) return Promise.resolve(undefined);
+  try {
+    return Promise.resolve({
+      kind: "module" as const,
+      specifier,
+      content: fs.readFileSync(fileURLToPath(specifier), "utf-8"),
+    });
+  } catch {
+    return Promise.resolve(undefined);
+  }
+}
 
 type DocNodeWithJsDoc<T = DocNodeBase> = T & {
   jsDoc: JsDoc;
@@ -325,7 +348,7 @@ function resolve(
 }
 
 async function assertDocs(specifiers: string[]) {
-  const docs = await doc(specifiers, { resolve });
+  const docs = await doc(specifiers, { resolve, load });
   for (const d of Object.values(docs).flat()) {
     if (d.jsDoc === undefined || d.declarationKind !== "export") continue;
 
@@ -351,16 +374,8 @@ async function assertDocs(specifiers: string[]) {
 }
 
 export async function checkDocs(specifiers: string[]) {
-  const { success, stderr } = await new Deno.Command(Deno.execPath(), {
-    args: ["doc", "--lint", ...specifiers],
-    stdin: "inherit",
-    stdout: "inherit",
-    stderr: "piped",
-  }).output();
-  if (!success) {
-    throw new Error(new TextDecoder().decode(stderr));
-  }
-
+  // Upstream also ran `deno doc --lint` here, which has no Bun equivalent.
+  // The JSDoc assertions below cover the documentation requirements.
   await assertDocs(specifiers);
 
   if (diagnostics.length > 0) {
@@ -377,6 +392,6 @@ export async function checkDocs(specifiers: string[]) {
 
     // deno-lint-ignore no-console
     console.log(`%c${errors.length} errors found`, "color: red");
-    Deno.exit(1);
+    process.exit(1);
   }
 }

@@ -6,7 +6,7 @@ You can deploy Fresh to any platform that can run Docker containers. Docker is a
 tool to containerize projects and portably run them on any supported platform.
 
 When packaging your Fresh app for Docker, it is important that you set the
-`DENO_DEPLOYMENT_ID`
+`FRESH_DEPLOYMENT_ID`
 [environment variable](/docs/advanced/environment-variables) in your container.
 This variable needs to be set to an opaque string ID that represents the version
 of your application that is currently being run. This could be a Git commit
@@ -18,25 +18,24 @@ correctly.
 Here is an example `Dockerfile` for a Fresh project:
 
 ```dockerfile Dockerfile
-FROM denoland/deno:latest
+FROM oven/bun:1
 
 ARG GIT_REVISION
-ENV DENO_DEPLOYMENT_ID=${GIT_REVISION}
+ENV FRESH_DEPLOYMENT_ID=${GIT_REVISION}
 
 WORKDIR /app
 
 COPY . .
-RUN deno install --allow-scripts
-RUN deno task build
+RUN bun install --frozen-lockfile
+RUN bun run build
 
 EXPOSE 8000
 
-CMD ["deno", "serve", "-A", "_fresh/server.js"]
+CMD ["bun", "_fresh/server.js"]
 ```
 
-> [info]: The `deno install --allow-scripts` step is required to populate
-> `node_modules` and run any post-install scripts needed by npm packages (e.g.
-> Tailwind CSS). This must happen before `deno task build`.
+> [info]: The `bun install` step is required to populate `node_modules` before
+> `bun run build`. `DENO_DEPLOYMENT_ID` is still read for compatibility.
 
 To build your Docker image inside of a Git repository:
 

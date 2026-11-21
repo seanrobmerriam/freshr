@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 /**
  * Module containing a simple example Fresh App
  *

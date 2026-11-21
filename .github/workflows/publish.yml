@@ -1,9 +1,14 @@
-name: Publish JSR
+name: Publish
 
+# Publishing is manual: the npm package names and scope for this fork still
+# need to be decided. By default this only performs a dry run.
 on:
-  push:
-    branches:
-      - main
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: "Only pack the packages, don't publish"
+        type: boolean
+        default: true
 
 jobs:
   publish:
@@ -12,20 +17,19 @@ jobs:
       contents: read
       id-token: write
 
-    # Skip publishing for forks
-    if: github.repository_owner == 'denoland'
-
     steps:
       - uses: actions/checkout@v6
 
-      - name: Install Deno
-        uses: denoland/setup-deno@v2
-        with:
-          cache: true
-          deno-version: canary
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
 
       - name: Install dependencies
-        run: deno install
+        run: bun install --frozen-lockfile
 
       - name: Publish
-        run: deno publish
+        env:
+          NPM_CONFIG_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          for pkg in build-id fresh plugin-vite plugin-tailwindcss plugin-tailwindcss-v3 init update; do
+            (cd "packages/$pkg" && bun publish --access public ${{ inputs.dry-run && '--dry-run' || '' }})
+          done

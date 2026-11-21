@@ -1,8 +1,11 @@
+import { expect as bunExpect, test } from "bun:test";
 import { expect } from "@std/expect";
 import { parse } from "./parse.ts";
-import { assertSnapshot } from "@std/testing/snapshot";
 import { inspect } from "node:util";
 import { stringify } from "./stringify.ts";
+
+// deno-lint-ignore no-explicit-any
+const Temporal: any = (globalThis as any).Temporal;
 
 const inner = { foo: 123 };
 const references = { a: inner, b: [inner, inner] };
@@ -52,9 +55,9 @@ const TESTS = [
 ];
 
 for (const value of TESTS) {
-  Deno.test(`round trip - ${inspect(value)}`, async (t) => {
+  test(`round trip - ${inspect(value)}`, () => {
     const str = stringify(value);
-    await assertSnapshot(t, str);
+    bunExpect(str).toMatchSnapshot();
     const parsed = parse(str);
     expect(parsed).toEqual(value);
   });

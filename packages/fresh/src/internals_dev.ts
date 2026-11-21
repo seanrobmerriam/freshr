@@ -14,3 +14,5 @@ export { specToName } from "./dev/builder.ts";
 export { pathToSpec, UniqueNamer } from "./utils.ts";
 export { updateCheck } from "./dev/update_check.ts";
 export { TEST_FILE_PATTERN, UPDATE_INTERVAL } from "./constants.ts";
+export { walk, type WalkEntry, type WalkOptions } from "./fs.ts";
+export { stripRegistryPrefix } from "./dev/esbuild.ts";

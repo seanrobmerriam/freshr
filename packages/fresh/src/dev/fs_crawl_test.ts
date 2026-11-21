@@ -1,8 +1,9 @@
+import { test } from "bun:test";
 import { expect } from "@std/expect/expect";
 import { createFakeFs } from "../test_utils.ts";
 import { crawlRouteDir, walkDir } from "./fs_crawl.ts";
 
-Deno.test("walkDir - ", async () => {
+test("walkDir - ", async () => {
   const fs = createFakeFs({
     "foo/bar/baz.txt": "foo",
     "foo/bar.txt": "foo",
@@ -19,7 +20,7 @@ Deno.test("walkDir - ", async () => {
   expect(files).toEqual(["foo/bar/baz.txt", "foo/bar.txt"]);
 });
 
-Deno.test("walkDir - respects skip patterns", async () => {
+test("walkDir - respects skip patterns", async () => {
   const fs = createFakeFs({
     "routes/index.tsx": "foo",
     "routes/index_test.tsx": "test",
@@ -44,10 +45,9 @@ Deno.test("walkDir - respects skip patterns", async () => {
   ]);
 });
 
-Deno.test({
-  name: "crawlRouteDir.filePath - normalized Windows paths",
-  ignore: Deno.build.os !== "windows",
-  fn: async () => {
+test.skipIf(process.platform !== "win32")(
+  "crawlRouteDir.filePath - normalized Windows paths",
+  async () => {
     const fs = createFakeFs({
       "foo\\bar\\baz.txt": "foo",
       "D:\\foo\\bar.tsx": "foo",
@@ -64,4 +64,4 @@ Deno.test({
       }),
     ]));
   },
-});
+);

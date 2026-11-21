@@ -1,4 +1,4 @@
-#!/usr/bin/env -S deno run -A --watch=static/,routes/
+#!/usr/bin/env -S bun --watch
 
 import { Builder } from "fresh/dev";
 import { tailwind } from "@fresh/plugin-tailwind";
@@ -6,7 +6,7 @@ import { tailwind } from "@fresh/plugin-tailwind";
 const builder = new Builder({ target: "safari12" });
 tailwind(builder);
 
-if (Deno.args.includes("build")) {
+if (process.argv.slice(2).includes("build")) {
   await builder.build();
 } else {
   await builder.listen(() => import("./main.ts"));

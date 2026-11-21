@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 import { App } from "../app.ts";
 import type { Context } from "../context.ts";
 import {
@@ -36,10 +37,10 @@ async function createTest(
   return res.status;
 }
 
-Deno.test("ipFilter - no option", async () => {
+test("ipFilter - no option", async () => {
   expect(await createTest("192.168.1.10", {})).toBe(200);
 });
-Deno.test("ipFilter - deny only", async () => {
+test("ipFilter - deny only", async () => {
   const ipFilterRules = {
     denyList: ["192.168.1.10", "2001:db8::1"],
   };
@@ -50,7 +51,7 @@ Deno.test("ipFilter - deny only", async () => {
   expect(await createTest("2001:db8::2", ipFilterRules)).toBe(200);
 });
 
-Deno.test("ipFilter - allow only", async () => {
+test("ipFilter - allow only", async () => {
   const ipFilterRules = {
     allowList: ["192.168.1.10", "2001:db8::1"],
   };
@@ -61,7 +62,7 @@ Deno.test("ipFilter - allow only", async () => {
 });
 
 // When both allow and deny are set, deny takes precedence
-Deno.test("ipFilter - allow and deny", async () => {
+test("ipFilter - allow and deny", async () => {
   const ipFilterRules = {
     denyList: ["192.168.1.10", "2001:db8::1"],
     allowList: ["192.168.1.10", "2001:db8::1"],
@@ -70,14 +71,14 @@ Deno.test("ipFilter - allow and deny", async () => {
   expect(await createTest("2001:db8::1", ipFilterRules)).toBe(403);
 });
 
-Deno.test("ipFilter - subnet mask", async () => {
+test("ipFilter - subnet mask", async () => {
   const ipFilterRules = {
     denyList: ["192.168.1.0/24"],
   };
   expect(await createTest("192.168.1.10", ipFilterRules)).toBe(403);
 });
 
-Deno.test("ipFilter - custom onBlocked", async () => {
+test("ipFilter - custom onBlocked", async () => {
   const ipFilterRules = {
     denyList: ["192.168.1.0/24"],
   };

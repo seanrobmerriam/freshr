@@ -1,75 +1,62 @@
-import twDenoJson from "../../plugin-tailwindcss/deno.json" with {
-  type: "json",
-};
+import * as fsp from "node:fs/promises";
+import { test } from "bun:test";
 import * as Marked from "marked";
-import { ensureDir, walk } from "@std/fs";
+import { walk } from "../src/fs.ts";
 import { dirname, join, relative } from "@std/path";
 // import { expect } from "@std/expect/expect";
 import { withTmpDir } from "../src/test_utils.ts";
-import { FRESH_VERSION, PREACT_VERSION } from "../../update/src/update.ts";
+import { runCommand } from "./test_utils.tsx";
 
-Deno.test("Docs Code example checks", async () => {
+test("Docs Code example checks", async () => {
   await using tmp = await withTmpDir();
 
   for await (const { path, code } of docsMarkdownFiles()) {
     const codePath = join(tmp.dir, path);
-    await ensureDir(dirname(codePath));
-    await Deno.writeTextFile(codePath, code);
+    await fsp.mkdir(dirname(codePath), { recursive: true });
+    await fsp.writeFile(codePath, code);
   }
 
-  const denoJson = {
-    lock: false,
-    imports: {
-      fresh: `jsr:@fresh/core@${FRESH_VERSION}`,
-      "@fresh/plugin-tailwind-v3":
-        `jsr:@fresh/plugin-tailwind@^${twDenoJson.version}`,
-      "@fresh/plugin-tailwind":
-        `jsr:@fresh/plugin-tailwind@^${twDenoJson.version}`,
-      preact: `npm:preact@^${PREACT_VERSION}`,
-      "@deno/gfm": "jsr:@deno/gfm@^0.11.0",
-      "@std/expect": "jsr:@std/expect@^1.0.16",
-    },
+  const root = join(import.meta.dirname!, "..", "..", "..");
+  const tsconfig = {
     compilerOptions: {
-      lib: ["dom", "dom.asynciterable", "deno.ns", "deno.unstable"],
-      jsx: "precompile",
+      target: "ESNext",
+      module: "Preserve",
+      moduleResolution: "bundler",
+      lib: ["ESNext", "DOM", "DOM.Iterable", "DOM.AsyncIterable"],
+      types: ["bun"],
+      typeRoots: [join(root, "node_modules", "@types")],
+      jsx: "react-jsx",
       jsxImportSource: "preact",
-      jsxPrecompileSkipElements: [
-        "a",
-        "img",
-        "source",
-        "body",
-        "html",
-        "head",
-        "title",
-        "meta",
-        "script",
-        "link",
-        "style",
-        "base",
-        "noscript",
-        "template",
-      ],
+      allowImportingTsExtensions: true,
+      noEmit: true,
+      strict: true,
+      skipLibCheck: true,
+      baseUrl: root,
+      paths: {
+        "fresh": ["packages/fresh/src/mod.ts"],
+        "fresh/*": ["packages/fresh/src/*"],
+        "@fresh/plugin-tailwind": ["packages/plugin-tailwindcss/src/mod.ts"],
+        "@fresh/plugin-tailwind-v3": [
+          "packages/plugin-tailwindcss-v3/src/mod.ts",
+        ],
+        "*": ["node_modules/*"],
+      },
     },
+    include: ["**/*"],
   };
-  await Deno.writeTextFile(
-    join(tmp.dir, "deno.json"),
-    JSON.stringify(denoJson, undefined, 2),
+  await fsp.writeFile(
+    join(tmp.dir, "tsconfig.json"),
+    JSON.stringify(tsconfig, undefined, 2),
   );
 
-  // Download and cache all dependencies (reduces `stdout` noise)
-  await new Deno.Command(Deno.execPath(), {
-    args: ["cache", "**/*"],
+  const { stdout, stderr } = await runCommand(process.execPath, {
+    args: [join(root, "node_modules", "typescript", "bin", "tsc"), "-p", "."],
     cwd: tmp.dir,
-  }).output();
-
-  const { stdout, stderr } = await new Deno.Command(Deno.execPath(), {
-    args: ["check", "**/*"],
-    cwd: tmp.dir,
-  }).output();
+  });
 
   const decoder = new TextDecoder();
   const output = `${decoder.decode(stdout)}\n${decoder.decode(stderr)}`;
-  // Log `deno check` output (can be removed if expects below are enabled)
+  // Log `tsc` output (can be removed if expects below are enabled)
   // deno-lint-ignore no-console
   console.log(output);
 
@@ -100,7 +87,7 @@ async function* docsMarkdownFiles() {
 
 async function extractTsCode(path: string) {
   const code: { file: string; code: string }[] = [];
-  const input = await Deno.readTextFile(path);
+  const input = await fsp.readFile(path, "utf-8");
   let index = 0;
 
   const tokens = await Marked.lexer(input, { gfm: true, async: true });

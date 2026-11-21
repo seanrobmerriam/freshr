@@ -1,11 +1,13 @@
+import * as fsp from "node:fs/promises";
 /**
  * Verifies that all image references in documentation markdown files
  * point to existing files in www/static/.
  *
- * Run: deno test -A docs/check_images_test.ts
+ * Run: bun test docs/check_images_test.ts
  */
-import { walk } from "jsr:@std/fs@1/walk";
-import { join, resolve } from "jsr:@std/path@1";
+import { test } from "bun:test";
+import { walk } from "../packages/fresh/src/fs.ts";
+import { join, resolve } from "@std/path";
 
 const ROOT = resolve(import.meta.dirname!);
 const PROJECT_ROOT = resolve(ROOT, "..");
@@ -14,7 +16,7 @@ const STATIC_DIR = join(PROJECT_ROOT, "www", "static");
 
 const IMAGE_RE = /!\[.*?\]\(([^)]+)\)/g;
 
-Deno.test("all doc image references point to existing files", async () => {
+test("all doc image references point to existing files", async () => {
   const errors: string[] = [];
 
   for await (
@@ -23,7 +25,7 @@ Deno.test("all doc image references point to existing files", async () => {
       includeDirs: false,
     })
   ) {
-    const content = await Deno.readTextFile(entry.path);
+    const content = await fsp.readFile(entry.path, "utf-8");
     const relativePath = entry.path.slice(PROJECT_ROOT.length);
 
     for (const match of content.matchAll(IMAGE_RE)) {
@@ -38,7 +40,7 @@ Deno.test("all doc image references point to existing files", async () => {
       const fsPath = join(STATIC_DIR, imgPath);
 
       try {
-        await Deno.stat(fsPath);
+        await fsp.stat(fsPath);
       } catch {
         errors.push(`${relativePath}: image not found: ${imgPath}`);
       }

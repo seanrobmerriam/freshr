@@ -30,6 +30,15 @@ import {
   newRouteCmd,
 } from "./commands.ts";
 import { MockBuildCache } from "./test_utils.ts";
+import {
+  isAddrInUse,
+  isBunServer,
+  isUpgradeResponse,
+  type NetAddr,
+  serve,
+  type ServeHandlerInfo,
+  toServeHandlerInfo,
+} from "./server.ts";
 
 // TODO: Completed type clashes in older Deno versions
 // deno-lint-ignore no-explicit-any
@@ -67,7 +76,20 @@ const DEFAULT_ERROR_HANDLER = async <State>(ctx: Context<State>) => {
 
 export type ListenOptions =
   & Partial<
-    Deno.ServeTcpOptions & Deno.TlsCertifiedKeyPem
+    {
+      /** The port to listen on. */
+      port: number;
+      /** A literal IP address or host name that can be resolved to an IP address. */
+      hostname: string;
+      /** An AbortSignal to close the server. */
+      signal: AbortSignal;
+      /** Called when the server started listening. */
+      onListen: (localAddr: NetAddr) => void;
+      /** PEM formatted TLS certificate. */
+      cert: string;
+      /** PEM formatted TLS private key. */
+      key: string;
+    }
   >
   & {
     remoteAddress?: string;
@@ -75,7 +97,7 @@ export type ListenOptions =
 export function createOnListen(
   basePath: string,
   options: ListenOptions,
-): (localAddr: Deno.NetAddr) => void {
+): (localAddr: NetAddr) => void {
   return (params) => {
     // Don't spam logs with this on live deployments
     if (DENO_DEPLOYMENT_ID) return;
@@ -88,12 +110,12 @@ export function createOnListen(
     let hostname = params.hostname;
     // Windows being windows...
     if (
-      Deno.build.os === "windows" &&
+      process.platform === "win32" &&
       (hostname === "0.0.0.0" || hostname === "::")
     ) {
       hostname = "localhost";
     }
-    // Work around https://github.com/denoland/deno/issues/23650
+    // IPv6 addresses need brackets in URLs
     hostname = hostname.startsWith("::") ? `[${hostname}]` : hostname;
 
     // deno-lint-ignore no-console
@@ -127,7 +149,7 @@ async function listenOnFreePort(
   options: ListenOptions,
   handler: (
     request: Request,
-    info?: Deno.ServeHandlerInfo,
+    info?: ServeHandlerInfo,
   ) => Promise<Response>,
 ) {
   // No port specified, check for a free port. Instead of picking just
@@ -137,9 +159,9 @@ async function listenOnFreePort(
   let firstError = null;
   for (let port = 8000; port < 8020; port++) {
     try {
-      return await Deno.serve({ ...options, port }, handler);
+      return serve({ ...options, port }, handler);
     } catch (err) {
-      if (err instanceof Deno.errors.AddrInUse) {
+      if (isAddrInUse(err)) {
         // Throw first EADDRINUSE error if no port is free
         if (!firstError) firstError = err;
         continue;
@@ -385,12 +407,20 @@ export class App<State> {
   }
 
   /**
-   * Create handler function for `Deno.serve` or to be used in
+   * Create handler function for `Bun.serve` or to be used in
    * testing.
+   *
+   * When passing it to `Bun.serve()` yourself, also pass the exported
+   * `websocket` handlers so that `ctx.upgrade()` works:
+   *
+   * ```ts
+   * import { websocket } from "fresh";
+   * Bun.serve({ fetch: app.handler(), websocket });
+   * ```
    */
   handler(): (
     request: Request,
-    info?: Deno.ServeHandlerInfo,
+    info?: ServeHandlerInfo,
   ) => Promise<Response> {
     let buildCache = this.#getBuildCache();
     if (buildCache === null) {
@@ -399,7 +429,7 @@ export class App<State> {
         DENO_DEPLOYMENT_ID !== undefined
       ) {
         throw new Error(
-          `Could not find _fresh directory. Maybe you forgot to run "deno task build" or maybe you're trying to run "main.ts" directly instead of "_fresh/server.js"?`,
+          `Could not find _fresh directory. Maybe you forgot to run "bun run build" or maybe you're trying to run "main.ts" directly instead of "_fresh/server.js"?`,
         );
       } else {
         buildCache = new MockBuildCache([], this.config.mode);
@@ -419,8 +449,9 @@ export class App<State> {
 
     return async (
       req: Request,
-      conn: Deno.ServeHandlerInfo = DEFAULT_CONN_INFO,
+      infoOrServer?: unknown,
     ) => {
+      const conn = toServeHandlerInfo(req, infoOrServer, DEFAULT_CONN_INFO);
       const url = new URL(req.url);
       // Prevent open redirect attacks
       url.pathname = url.pathname.replace(/\/+/g, "/");
@@ -483,6 +514,14 @@ export class App<State> {
           );
         }
 
+        if (isUpgradeResponse(result)) {
+          // Bun expects `undefined` to be returned after a successful
+          // upgrade. When we're not running directly under Bun.serve the
+          // marker response is returned as is.
+          // deno-lint-ignore no-explicit-any
+          return (isBunServer(infoOrServer) ? undefined : result) as any;
+        }
+
         if (method === "HEAD") {
           return new Response(null, result);
         }
@@ -505,7 +544,7 @@ export class App<State> {
 
     const handler = this.handler();
     if (options.port) {
-      await Deno.serve(options, handler);
+      serve(options, handler);
       return;
     }
 

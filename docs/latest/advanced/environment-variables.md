@@ -3,26 +3,25 @@ description: |
   How to use environment variables in Fresh, including public variables that are inlined into island bundles.
 ---
 
-Environment variables in Deno are typically read via `Deno.env.get()` or
-`process.env.*` calls or via an `.env` file if the `--env-file` flag is used,
-see
-[how to use Environment Variables in Deno](https://docs.deno.com/runtime/reference/env_variables/).
+Environment variables in Bun are read via `process.env.*` or `Bun.env.*`. Bun
+automatically loads `.env` files, see
+[how to use Environment Variables in Bun](https://bun.sh/docs/runtime/env).
 
 On top of that Fresh automatically inlines all environment variables whose names
 start with `FRESH_PUBLIC_` during bundling of [islands](/docs/concepts/islands).
 
-> [info]: This inlining step occurs when building the app (`deno task build`).
+> [info]: This inlining step occurs when building the app (`bun run build`).
 > Environment variables inside islands cannot be read at runtime.
 
 Example:
 
 ```sh Terminal
-$ FRESH_PUBLIC_FOO=bar deno task dev
+$ FRESH_PUBLIC_FOO=bar bun run dev
 ```
 
 ```tsx
 export function MyIsland() {
-  const value = Deno.env.get("FRESH_PUBLIC_FOO");
+  const value = process.env.FRESH_PUBLIC_FOO;
   return <h1>{value}</h1>;
 }
 ```
@@ -39,20 +38,19 @@ export function MyIsland() {
 This way you can use specific environment variables in the browser.
 
 > [warn]: To make inlining work the code needs to be analyzable by our plugins.
-> This means that not all forms of reading an environment variable in Deno are
+> This means that not all forms of reading an environment variable are
 > supported, even if it's perfectly valid JavaScript code.
 >
 > ```ts MyIsland.tsx
 > // CORRECT
-> Deno.env.get("FRESH_PUBLIC_FOO");
 > process.env.FRESH_PUBLIC_FOO;
+> Bun.env.FRESH_PUBLIC_FOO;
 >
 > // WRONG
 > const name = "FRESH_PUBLIC_FOO";
-> Deno.env.get(name);
 > process.env[name];
 >
 > // WRONG
-> const obj = Deno.env.toObject();
+> const obj = { ...process.env };
 > obj.FRESH_PUBLIC_FOO;
 > ```

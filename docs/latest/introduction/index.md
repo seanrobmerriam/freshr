@@ -24,7 +24,7 @@ app.listen();
 Create a new Fresh app by running:
 
 ```sh Terminal
-deno run -Ar jsr:@fresh/init
+bunx @fresh/init
 ```
 
 ## Features
@@ -34,8 +34,8 @@ ship JavaScript for areas in the page that need to be interactive. This is often
 referred to as the
 [Island Architecture](https://jasonformat.com/islands-architecture).
 
-- **Fast** 🚀 - Rendering is super fast thanks to [Preact][preact] and Deno's
-  [`precompile` transform](https://docs.deno.com/runtime/reference/jsx/#jsx-precompile-transform)
+- **Fast** 🚀 - Rendering is super fast thanks to [Preact][preact] and
+  [Bun][bun]
 - **Lightweight** 🏎️ - Only ship the JavaScript you need
 - **Extensible** 🧩 - Nearly every aspect can be customized
 - **Powerful & small API** 🤗 - Familiar APIs make you productive quickly
@@ -70,10 +70,10 @@ e-commerce projects.
 
 ## Hosting
 
-Fresh runs anywhere [Deno][deno] runs. Deploy with a single click on
-[Deno Deploy][deno-deploy], or package your app in a Docker container for any
-cloud provider or self-hosted infrastructure.
+Fresh runs anywhere [Bun][bun] runs. Run the production build with `bun
+_fresh/server.js`, or package your app in a Docker container for any cloud
+provider or self-hosted infrastructure.
 
 [preact]: https://preactjs.com
-[deno]: https://deno.com
+[bun]: https://bun.sh
 [deno-deploy]: https://deno.com/deploy

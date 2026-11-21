@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "paths": {
+      "@marvinh-test/fresh-island": [
+        "./tools/types/marvinh_test_fresh_island.d.ts"
+      ]
+    }
+  }
+}

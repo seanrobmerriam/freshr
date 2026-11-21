@@ -1,3 +1,5 @@
+import * as fsp from "node:fs/promises";
+import { isNotFound, openFile } from "../server.ts";
 import {
   type BuildCache,
   IslandPreparer,
@@ -113,14 +115,11 @@ export class MemoryBuildCache<State> implements DevBuildCache<State> {
     const unprocessed = this.#unprocessedFiles.get(pathname);
     if (unprocessed !== undefined) {
       try {
-        const [stat, file] = await Promise.all([
-          Deno.stat(unprocessed),
-          Deno.open(unprocessed, { read: true }),
-        ]);
+        const file = await openFile(unprocessed);
 
         return {
           hash: null,
-          size: stat.size,
+          size: file.size,
           readable: file.readable,
           contentType: getContentType(unprocessed),
           close: () => file.close(),
@@ -168,13 +167,13 @@ export class MemoryBuildCache<State> implements DevBuildCache<State> {
         try {
           const filePath = path.join(staticDir, pathname);
           const rel = path.relative(staticDir, filePath);
-          if (!rel.startsWith("..") && (await Deno.stat(filePath)).isFile) {
+          if (!rel.startsWith("..") && (await fsp.stat(filePath)).isFile()) {
             const filePathname = new URL(rel, "http://localhost").pathname;
             this.addUnprocessedFile(filePathname, staticDir);
             return this.readFile(filePathname);
           }
         } catch (err) {
-          if (!(err instanceof Deno.errors.NotFound)) {
+          if (!isNotFound(err)) {
             throw err;
           }
         }
@@ -293,7 +292,7 @@ export class DiskBuildCache<State> implements DevBuildCache<State> {
     assertInDir(filePath, outDir);
 
     await fsAdapter.mkdirp(path.dirname(filePath));
-    await Deno.writeFile(filePath, content);
+    await fsp.writeFile(filePath, content);
   }
 
   // deno-lint-ignore require-await
@@ -377,7 +376,7 @@ export class DiskBuildCache<State> implements DevBuildCache<State> {
 
     const islands = Array.from(this.islandModNameToChunk.values());
 
-    await Deno.writeTextFile(
+    await fsp.writeFile(
       path.join(outDir, "snapshot.js"),
       await generateSnapshotServer({
         buildId: this.#config.buildId,
@@ -395,7 +394,7 @@ export class DiskBuildCache<State> implements DevBuildCache<State> {
 
     // TODO: Make main file configurable
     const appPath = path.relative(outDir, root);
-    await Deno.writeTextFile(
+    await fsp.writeFile(
       path.join(outDir, "server.js"),
       generateServerEntry({
         root: toPosix(appPath),
@@ -442,14 +441,16 @@ export interface PendingStaticFile {
 }
 
 export async function writeCompiledEntry(outDir: string) {
-  await Deno.writeTextFile(
+  await fsp.writeFile(
     path.join(outDir, "compiled-entry.js"),
     `import fetcher from "./server.js";
 
-Deno.serve(
-  { port: Deno.env.get("PORT"), hostname: Deno.env.get("HOSTNAME") },
-  fetcher.fetch
-);`,
+Bun.serve({
+  port: process.env.PORT ?? 8000,
+  hostname: process.env.HOSTNAME,
+  fetch: fetcher.fetch,
+  websocket: fetcher.websocket,
+});`,
   );
 }
 
@@ -544,10 +545,10 @@ ${islandMarkers}
 
 export const staticFiles = new Map([
 ${
-    staticFiles.map((def) =>
-      `  [${JSON.stringify(def.name)}, ${JSON.stringify(def)}]`
-    ).join(",\n")
-  }
+  staticFiles.map((def) =>
+    `  [${JSON.stringify(def.name)}, ${JSON.stringify(def)}]`
+  ).join(",\n")
+}
 ]);
 
 export const entryAssets = [${entryAssets}];
@@ -576,8 +577,9 @@ export async function prepareStaticFile(
     immutable?: boolean;
   }
 > {
-  const file = await Deno.open(item.filePath);
-  const hash = item.hash ? item.hash : await hashContent(file.readable);
+  const hash = item.hash
+    ? item.hash
+    : await hashContent((await openFile(item.filePath)).readable);
   const encodedPathname = systemPathToUrlEncoded(item.pathname);
 
   return {
@@ -615,7 +617,7 @@ export function generateServerEntry(
   }
 
   return `${EDIT_WARNING}
-import { setBuildCache, ProdBuildCache, path } from "fresh/internal";
+import { setBuildCache, ProdBuildCache, path, websocket } from "fresh/internal";
 import * as snapshot from "${snapshotSpecifier}";
 import { app } from "${serverEntry}";
 
@@ -623,7 +625,10 @@ const root = ${rootPath};
 setBuildCache(app, new ProdBuildCache(root, snapshot), "production");
 
 export default {
-  fetch: app.handler()
+  port: Number(process.env.PORT ?? 8000),
+  development: false,
+  fetch: app.handler(),
+  websocket,
 };
 `;
 }

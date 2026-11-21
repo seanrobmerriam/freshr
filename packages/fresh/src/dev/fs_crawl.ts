@@ -1,5 +1,5 @@
 import { type FsAdapter, fsAdapter } from "../fs.ts";
-import type { WalkEntry } from "@std/fs/walk";
+import type { WalkEntry } from "../fs.ts";
 import { type FsRouteFileNoMod, toPosix } from "./dev_build_cache.ts";
 import * as path from "@std/path";
 import { pathToPattern } from "../router.ts";

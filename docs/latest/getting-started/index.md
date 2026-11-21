@@ -9,7 +9,7 @@ Let's set up your first Fresh project. To create a new project, run this
 command:
 
 ```sh Terminal
-deno run -Ar jsr:@fresh/init
+bunx @fresh/init
 ```
 
 This will spawn a short wizard that guides you through the setup, like the
@@ -32,13 +32,14 @@ project folder should look like this:
 │
 ├── client.ts       # Client entry file that's loaded on every page.
 ├── main.ts         # The server entry file of your app
-├── deno.json       # Contains dependencies, tasks, etc
+├── package.json    # Contains dependencies, scripts, etc
+├── tsconfig.json   # TypeScript, JSX and path alias configuration
 └── [vite.config.ts](/docs/advanced/vite)  # Vite configuration file
 ```
 
 ## Path aliases
 
-Your new project comes with a `@/` path alias pre-configured in `deno.json`.
+Your new project comes with a `@/` path alias pre-configured in `tsconfig.json`.
 This allows you to use absolute imports from your project root instead of
 relative paths:
 
@@ -52,13 +53,15 @@ import { define } from "../utils.ts";
 import { Button } from "../components/Button.tsx";
 ```
 
-The `@/` alias is configured in your `deno.json` imports section:
+The `@/` alias is configured in the `paths` section of your `tsconfig.json`:
 
-```json deno.json
+```json tsconfig.json
 {
-  "imports": {
-    "@/": "./"
-    // ... other imports
+  "compilerOptions": {
+    "paths": {
+      "@/*": ["./*"]
+    }
+    // ... other options
   }
 }
 ```
@@ -66,10 +69,12 @@ The `@/` alias is configured in your `deno.json` imports section:
 This makes imports cleaner and easier to refactor, especially as your project
 grows.
 
-Run the `dev` task to launch your app in development mode:
+Install the dependencies and run the `dev` script to launch your app in
+development mode:
 
 ```sh Terminal
-deno task dev
+bun install
+bun run dev
 ```
 
 Go to the URL printed in the terminal to view your app.

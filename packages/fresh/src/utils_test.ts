@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 import { expect } from "@std/expect";
 import {
   escapeScript,
@@ -6,7 +7,7 @@ import {
   UniqueNamer,
 } from "./utils.ts";
 
-Deno.test("filenameToExportName", () => {
+test("filenameToExportName", () => {
   expect(pathToExportName("/islands/foo.tsx")).toBe("foo");
   expect(pathToExportName("/islands/foo.v2.tsx")).toBe("foo_v2");
   expect(pathToExportName("/islands/nav-bar.tsx")).toBe("nav_bar");
@@ -17,7 +18,7 @@ Deno.test("filenameToExportName", () => {
   );
 });
 
-Deno.test("escapeScriptContent - closing </script> + </style>", () => {
+test("escapeScriptContent - closing </script> + </style>", () => {
   expect(
     escapeScript(
       "foo</script>bar</style>baz</script>foobar",
@@ -34,12 +35,12 @@ Deno.test("escapeScriptContent - closing </script> + </style>", () => {
   );
 });
 
-Deno.test("escapeScript - legacy <!--", () => {
+test("escapeScript - legacy <!--", () => {
   expect(escapeScript("<!--<script>")).toEqual("\\x3C!--<script>");
   expect(escapeScript("<!--</script>")).toEqual("\\x3C!--<\\/script>");
 });
 
-Deno.test("escapeScript - script combined", () => {
+test("escapeScript - script combined", () => {
   expect(escapeScript(`// This is a comment containing <!--
 let foo = x <!--y; // That's valid JS operators
 const s = "This is a string containing <!--";`)).toEqual(
@@ -49,7 +50,7 @@ const s = "This is a string containing \\x3C!--";`,
   );
 });
 
-Deno.test("escapeScript - json", () => {
+test("escapeScript - json", () => {
   expect(escapeScript("<!--<script>", { json: true })).toEqual(
     "\\u003C!--<script>",
   );
@@ -58,7 +59,7 @@ Deno.test("escapeScript - json", () => {
   );
 });
 
-Deno.test("pathToSpec", () => {
+test("pathToSpec", () => {
   expect(pathToSpec("/foo", "/foo/bar")).toEqual("./bar");
   expect(pathToSpec("/", "/foo//bar")).toEqual("./foo/bar");
   expect(pathToSpec("/foo", "bar")).toEqual("./bar");
@@ -73,13 +74,13 @@ Deno.test("pathToSpec", () => {
   expect(pathToSpec("/foo", "jsr:@foo/bar")).toEqual("jsr:@foo/bar");
 });
 
-Deno.test("UniqueNamer - generates unique name for same names", () => {
+test("UniqueNamer - generates unique name for same names", () => {
   const namer = new UniqueNamer();
   expect(namer.getUniqueName("foo")).toEqual("foo");
   expect(namer.getUniqueName("foo")).toEqual("foo_1");
 });
 
-Deno.test("UniqueNamer - accounts for JS syntax", () => {
+test("UniqueNamer - accounts for JS syntax", () => {
   const namer = new UniqueNamer();
   expect(namer.getUniqueName("foo-bar")).toEqual("foo_bar");
   expect(namer.getUniqueName("switch")).toEqual("_switch");

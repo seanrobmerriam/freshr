@@ -1,3 +1,4 @@
+import { afterAll, test } from "bun:test";
 import * as path from "@std/path";
 import { expect } from "@std/expect";
 import {
@@ -19,6 +20,13 @@ import {
 const tmp = await prepareDevServer(DEMO_DIR);
 const demoServer = await spawnDevServer(tmp.dir, {
   FRESH_PUBLIC_FOO: "foobar",
+});
+
+// Stop the shared dev server, otherwise it outlives the test process.
+afterAll(async () => {
+  await demoServer[Symbol.asyncDispose]();
+  await demoServer.promise;
+  await tmp[Symbol.asyncDispose]();
 });
 
 integrationTest("vite dev - launches", async () => {
@@ -542,26 +550,16 @@ integrationTest("vite dev - support jsx namespace", async () => {
 });
 
 // issue: https://github.com/denoland/fresh/issues/3653
-Deno.test({
-  name: "vite dev - CJS module import",
-  fn: async () => {
-    const res = await fetch(`${demoServer.address()}/tests/commonjs`);
-    const text = await res.text();
-    expect(text).toContain("<h1>ok</h1>");
-  },
-  sanitizeOps: false,
-  sanitizeResources: false,
+test("vite dev - CJS module import", async () => {
+  const res = await fetch(`${demoServer.address()}/tests/commonjs`);
+  const text = await res.text();
+  expect(text).toContain("<h1>ok</h1>");
 });
 
-Deno.test({
-  name: "vite dev - maxmind CJS",
-  fn: async () => {
-    const res = await fetch(`${demoServer.address()}/tests/maxmind`);
-    const text = await res.text();
-    expect(text).toContain("<h1>maxmind</h1>");
-  },
-  sanitizeOps: false,
-  sanitizeResources: false,
+test("vite dev - maxmind CJS", async () => {
+  const res = await fetch(`${demoServer.address()}/tests/maxmind`);
+  const text = await res.text();
+  expect(text).toContain("<h1>maxmind</h1>");
 });
 
 // issue: https://github.com/denoland/fresh/issues/3666

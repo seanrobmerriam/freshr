@@ -1,9 +1,10 @@
+import { test } from "bun:test";
 import { expect } from "@std/expect";
 import { parse } from "./parse.ts";
 import { stringify } from "./stringify.ts";
 import { Signal, signal } from "@preact/signals";
 
-Deno.test("custom parse - Point", () => {
+test("custom parse - Point", () => {
   class Point {
     constructor(public x: number, public y: number) {
       this.x = x;
@@ -24,7 +25,7 @@ Deno.test("custom parse - Point", () => {
   expect(point).toEqual(new Point(30, 40));
 });
 
-Deno.test("custom parse - Signals", () => {
+test("custom parse - Signals", () => {
   const res = parse<Signal>('[["Signal",1],2]', {
     Signal: (value) => signal(value),
   });
@@ -32,7 +33,7 @@ Deno.test("custom parse - Signals", () => {
   expect(res.peek()).toEqual(2);
 });
 
-Deno.test("custom stringify - Signals", () => {
+test("custom stringify - Signals", () => {
   const s = signal(2);
   expect(stringify(s, {
     Signal: (s2: unknown) => {
@@ -43,7 +44,7 @@ Deno.test("custom stringify - Signals", () => {
   );
 });
 
-Deno.test("custom parse - Signals with null value", () => {
+test("custom parse - Signals with null value", () => {
   const res = parse<Signal>('[["Signal",-2]]', {
     Signal: (value) => signal(value),
   });
@@ -51,7 +52,7 @@ Deno.test("custom parse - Signals with null value", () => {
   expect(res.peek()).toEqual(null);
 });
 
-Deno.test("custom stringify - Signals with null value", () => {
+test("custom stringify - Signals with null value", () => {
   const s = signal(null);
   expect(stringify(s, {
     Signal: (s2: unknown) => {
@@ -62,7 +63,7 @@ Deno.test("custom stringify - Signals with null value", () => {
   );
 });
 
-Deno.test("custom parse - Signals with undefined value", () => {
+test("custom parse - Signals with undefined value", () => {
   const res = parse<Signal>('[["Signal",-1]]', {
     Signal: (value) => signal(value),
   });
@@ -70,7 +71,7 @@ Deno.test("custom parse - Signals with undefined value", () => {
   expect(res.peek()).toEqual(undefined);
 });
 
-Deno.test("custom stringify - Signals with undefined value", () => {
+test("custom stringify - Signals with undefined value", () => {
   const s = signal(undefined);
   expect(stringify(s, {
     Signal: (s2: unknown) => {
@@ -81,7 +82,7 @@ Deno.test("custom stringify - Signals with undefined value", () => {
   );
 });
 
-Deno.test("custom stringify - referenced Signals", () => {
+test("custom stringify - referenced Signals", () => {
   const s = signal(2);
   expect(stringify([s, s], {
     Signal: (s2: unknown) => {

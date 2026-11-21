@@ -1,10 +1,11 @@
+import { test } from "bun:test";
 import { compileMiddlewares } from "./mod.ts";
 import { expect } from "@std/expect";
 import { serveMiddleware } from "../test_utils.ts";
 import type { Middleware } from "./mod.ts";
 import type { Lazy, MaybeLazy } from "../types.ts";
 
-Deno.test("compileMiddlewares", async () => {
+test("compileMiddlewares", async () => {
   const middlewares: Middleware<{ text: string }>[] = [
     (ctx) => {
       ctx.state.text = "A";
@@ -32,7 +33,7 @@ Deno.test("compileMiddlewares", async () => {
   expect(await res.text()).toEqual("AB");
 });
 
-Deno.test("compileMiddlewares - middlewares should only be called once", async () => {
+test("compileMiddlewares - middlewares should only be called once", async () => {
   const A: Middleware<{ count: number }> = (ctx) => {
     if (ctx.state.count === undefined) {
       ctx.state.count = 0;
@@ -53,7 +54,7 @@ Deno.test("compileMiddlewares - middlewares should only be called once", async (
   expect(await res.text()).toEqual("0");
 });
 
-Deno.test("compileMiddlewares - runs multiple stacks", async () => {
+test("compileMiddlewares - runs multiple stacks", async () => {
   type State = { text: string };
   const A: Middleware<State> = (ctx) => {
     ctx.state.text = "A";
@@ -83,7 +84,7 @@ Deno.test("compileMiddlewares - runs multiple stacks", async () => {
   expect(await res.text()).toEqual("ABCD");
 });
 
-Deno.test("compileMiddlewares - throws errors", async () => {
+test("compileMiddlewares - throws errors", async () => {
   let thrownA: unknown = null;
   let thrownB: unknown = null;
   let thrownC: unknown = null;
@@ -132,7 +133,7 @@ Deno.test("compileMiddlewares - throws errors", async () => {
   expect(thrownC).toBeInstanceOf(Error);
 });
 
-Deno.test("compileMiddlewares - lazy middlewares", async () => {
+test("compileMiddlewares - lazy middlewares", async () => {
   type State = { text: string };
 
   let called = 0;
@@ -170,7 +171,7 @@ Deno.test("compileMiddlewares - lazy middlewares", async () => {
   expect(called).toEqual(1);
 });
 
-Deno.test("compileMiddlewares - single middleware", async () => {
+test("compileMiddlewares - single middleware", async () => {
   const server = serveMiddleware<{ text: string }>(
     compileMiddlewares([() => new Response("single")]),
   );
@@ -179,7 +180,7 @@ Deno.test("compileMiddlewares - single middleware", async () => {
   expect(await res.text()).toEqual("single");
 });
 
-Deno.test("compileMiddlewares - post-processing after next()", async () => {
+test("compileMiddlewares - post-processing after next()", async () => {
   type State = { text: string };
 
   const middlewares: Middleware<State>[] = [
@@ -199,7 +200,7 @@ Deno.test("compileMiddlewares - post-processing after next()", async () => {
   expect(await res.text()).toEqual("wrapped(inner)");
 });
 
-Deno.test("compileMiddlewares - concurrent requests share compiled chain", async () => {
+test("compileMiddlewares - concurrent requests share compiled chain", async () => {
   type State = { text: string };
   let concurrency = 0;
   let maxConcurrency = 0;
@@ -231,7 +232,7 @@ Deno.test("compileMiddlewares - concurrent requests share compiled chain", async
   expect(maxConcurrency).toBeGreaterThan(1);
 });
 
-Deno.test("compileMiddlewares - onError callback", async () => {
+test("compileMiddlewares - onError callback", async () => {
   const errors: unknown[] = [];
   const middlewares: Middleware<{ text: string }>[] = [
     () => {
@@ -253,7 +254,7 @@ Deno.test("compileMiddlewares - onError callback", async () => {
   expect(errors[0]).toBeInstanceOf(Error);
 });
 
-Deno.test("compileMiddlewares - empty array falls through to next", async () => {
+test("compileMiddlewares - empty array falls through to next", async () => {
   const server = serveMiddleware<{ text: string }>(
     compileMiddlewares([]),
     { next: () => Promise.resolve(new Response("fallthrough")) },
@@ -263,7 +264,7 @@ Deno.test("compileMiddlewares - empty array falls through to next", async () => 
   expect(await res.text()).toEqual("fallthrough");
 });
 
-Deno.test("compileMiddlewares - calls last next", async () => {
+test("compileMiddlewares - calls last next", async () => {
   const middlewares: Middleware<{ text: string }>[] = [
     (ctx) => ctx.next(),
   ];

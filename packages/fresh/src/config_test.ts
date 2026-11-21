@@ -1,12 +1,13 @@
+import { test } from "bun:test";
 import { expect } from "@std/expect";
 import { parseDirPath } from "./config.ts";
 
-Deno.test("parseDirPath", () => {
-  const cwd = Deno.cwd().replaceAll("\\", "/");
+test("parseDirPath", () => {
+  const cwd = process.cwd().replaceAll("\\", "/");
 
   // File paths
   expect(parseDirPath("file:///foo/bar", cwd)).toEqual("/foo/bar");
-  if (Deno.build.os === "windows") {
+  if (process.platform === "win32") {
     expect(parseDirPath("file:///C:/foo/bar", cwd)).toEqual("C:/foo/bar");
   }
 
@@ -15,7 +16,7 @@ Deno.test("parseDirPath", () => {
 
   // Absolute paths
   expect(parseDirPath("/foo/bar", cwd)).toEqual("/foo/bar");
-  if (Deno.build.os === "windows") {
+  if (process.platform === "win32") {
     expect(parseDirPath("C:/foo/bar", cwd)).toEqual("C:/foo/bar");
   }
 });

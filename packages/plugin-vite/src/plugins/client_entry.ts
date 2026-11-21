@@ -1,3 +1,4 @@
+import * as fsp from "node:fs/promises";
 import type { Plugin } from "vite";
 import { pathWithRoot, type ResolvedFreshViteConfig } from "../utils.ts";
 
@@ -41,8 +42,8 @@ export function clientEntryPlugin(options: ResolvedFreshViteConfig): Plugin {
       async handler() {
         let exists = false;
         try {
-          const stat = await Deno.stat(clientEntry);
-          exists = stat.isFile;
+          const stat = await fsp.stat(clientEntry);
+          exists = stat.isFile();
         } catch {
           exists = false;
         }

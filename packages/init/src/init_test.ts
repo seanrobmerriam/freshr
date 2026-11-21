@@ -1,3 +1,5 @@
+import * as fsp from "node:fs/promises";
+import { test } from "bun:test";
 import { expect } from "@std/expect";
 import {
   CONFIRM_TAILWIND_MESSAGE,
@@ -7,7 +9,11 @@ import {
   initProject,
 } from "./init.ts";
 import * as path from "@std/path";
-import { getStdOutput, withBrowser } from "../../fresh/tests/test_utils.tsx";
+import {
+  getStdOutput,
+  runCommand,
+  withBrowser,
+} from "../../fresh/tests/test_utils.tsx";
 import { waitForText } from "../../fresh/tests/test_utils.tsx";
 import { withChildProcessServer } from "../../fresh/tests/test_utils.tsx";
 import { withTmpDir as withTmpDirBase } from "../../fresh/src/test_utils.ts";
@@ -42,99 +48,43 @@ function stubLogs() {
 
 function withTmpDir(): Promise<{ dir: string } & AsyncDisposable> {
   // Windows need temporary files in the repository root
-  if (Deno.build.os === "windows") {
+  if (process.platform === "win32") {
     const dir = path.join(import.meta.dirname!, "..", "..", "..", "..");
     return withTmpDirBase({ dir, prefix: "tmp_" });
   }
   return withTmpDirBase();
 }
 
+/**
+ * Point the generated project at the packages in this repository. Upstream
+ * this linked the local packages through a Deno workspace. With Bun we
+ * symlink the repository's `node_modules` so that `fresh` resolves to the
+ * workspace package and dependencies like `preact` are shared (a duplicate
+ * copy of preact would break rendering).
+ */
 async function patchProject(dir: string): Promise<void> {
-  const jsonPath = path.join(dir, "deno.json");
-  const json = JSON.parse(await Deno.readTextFile(jsonPath));
+  const pkgPath = path.join(dir, "package.json");
+  const pkg = JSON.parse(await fsp.readFile(pkgPath, "utf-8"));
+  expect(pkg.dependencies.fresh).toMatch(/^npm:@fresh\/core@/);
 
-  const linkedDir = path.join(dir, "_linked");
-  try {
-    await Deno.mkdir(linkedDir, { recursive: true });
-  } catch (err) {
-    if (!(err instanceof Deno.errors.AlreadyExists)) {
-      throw err;
-    }
-  }
-
-  const ignore = (entry: Deno.DirEntry, _full: string) => {
-    return /^(\.|tmp_)/.test(entry.name) ||
-      /_test\.[tj]sx?$/.test(entry.name) ||
-      entry.name === "tests" || entry.name === "test";
-  };
-
-  await copyRecursive(
-    path.join(import.meta.dirname!, "..", "..", "fresh"),
-    path.join(linkedDir, "fresh"),
-    ignore,
+  const repoModules = path.join(
+    import.meta.dirname!,
+    "..",
+    "..",
+    "..",
+    "node_modules",
   );
-
-  await copyRecursive(
-    path.join(import.meta.dirname!, "..", "..", "build-id"),
-    path.join(linkedDir, "build-id"),
-    ignore,
+  await fsp.symlink(
+    repoModules,
+    path.join(dir, "node_modules"),
+    process.platform === "win32" ? "junction" : "dir",
   );
-
-  json.workspace = ["./_linked/*"];
-  json.exclude = [...json.exclude ?? [], "**/_linked/*"];
-
-  // assert with this stricter rule, before adding it to initialized projects
-  json.lint.rules.include = ["verbatim-module-syntax"];
-
-  await Deno.writeTextFile(jsonPath, JSON.stringify(json, null, 2) + "\n");
-  const installProc = await new Deno.Command(Deno.execPath(), {
-    cwd: dir,
-    args: ["install"],
-  }).output();
-
-  if (installProc.code !== 0) {
-    const { stderr, stdout } = getStdOutput(installProc);
-    // deno-lint-ignore no-console
-    console.log(stderr);
-    // deno-lint-ignore no-console
-    console.log(stdout);
-  }
-
-  expect(installProc.code).toEqual(0);
-}
-
-async function copyRecursive(
-  from: string,
-  to: string,
-  ignore?: (entry: Deno.DirEntry, full: string) => boolean,
-): Promise<void> {
-  for await (const entry of Deno.readDir(from)) {
-    const source = path.join(from, entry.name);
-    const target = path.join(to, entry.name);
-
-    if (ignore && ignore(entry, source)) {
-      continue;
-    }
-
-    if (entry.isFile) {
-      try {
-        await Deno.mkdir(to, { recursive: true });
-      } catch (err) {
-        if (!(err instanceof Deno.errors.AlreadyExists)) {
-          throw err;
-        }
-      }
-      await Deno.copyFile(source, target);
-    } else if (entry.isDirectory) {
-      await copyRecursive(source, target, ignore);
-    }
-  }
 }
 
 async function expectProjectFile(dir: string, pathname: string) {
   const filePath = path.join(dir, ...pathname.split("/").filter(Boolean));
-  const stat = await Deno.stat(filePath);
-  if (!stat.isFile) {
+  const stat = await fsp.stat(filePath);
+  if (!stat.isFile()) {
     throw new Error(`Not a project file: ${filePath}`);
   }
 }
@@ -142,12 +92,12 @@ async function expectProjectFile(dir: string, pathname: string) {
 async function expectNotProjectFile(dir: string, pathname: string) {
   const filePath = path.join(dir, ...pathname.split("/").filter(Boolean));
   try {
-    const stat = await Deno.stat(filePath);
-    if (stat.isFile) {
+    const stat = await fsp.stat(filePath);
+    if (stat.isFile()) {
       throw new Error(`A project file but expected it not to be: ${filePath}`);
     }
   } catch (err) {
-    if (!(err instanceof Deno.errors.NotFound)) {
+    if (!((err as NodeJS.ErrnoException)?.code === "ENOENT")) {
       throw err;
     }
   }
@@ -155,11 +105,11 @@ async function expectNotProjectFile(dir: string, pathname: string) {
 
 async function readProjectFile(dir: string, pathname: string): Promise<string> {
   const filePath = path.join(dir, ...pathname.split("/").filter(Boolean));
-  const content = await Deno.readTextFile(filePath);
+  const content = await fsp.readFile(filePath, "utf-8");
   return content;
 }
 
-Deno.test("init - show help", async () => {
+test("init - show help", async () => {
   using logs = stubLogs();
 
   await testInitProject("", [], { help: true });
@@ -171,7 +121,7 @@ Deno.test("init - show help", async () => {
   expect(args).toEqual(logs.calls.flatMap((c) => c.args).slice(args.length));
 });
 
-Deno.test("init - new project", async () => {
+test("init - new project", async () => {
   await using tmp = await withTmpDir();
   using _promptStub = stubPrompt("fresh-init");
   using _confirmStub = stubConfirm();
@@ -179,7 +129,7 @@ Deno.test("init - new project", async () => {
   await testInitProject(tmp.dir, [], { builder: true });
 });
 
-Deno.test("init - create project dir", async () => {
+test("init - create project dir", async () => {
   await using tmp = await withTmpDir();
   const dir = tmp.dir;
   using _promptStub = stubPrompt("fresh-init");
@@ -187,14 +137,15 @@ Deno.test("init - create project dir", async () => {
   await testInitProject(dir, [], { builder: true });
 
   const root = path.join(dir, "fresh-init");
-  await expectProjectFile(root, "deno.json");
+  await expectProjectFile(root, "package.json");
+  await expectProjectFile(root, "tsconfig.json");
   await expectProjectFile(root, "main.ts");
   await expectProjectFile(root, "dev.ts");
   await expectProjectFile(root, ".gitignore");
   await expectProjectFile(root, "static/styles.css");
 });
 
-Deno.test("init - with tailwind", async () => {
+test("init - with tailwind", async () => {
   await using tmp = await withTmpDir();
   const dir = tmp.dir;
   using _promptStub = stubPrompt(".");
@@ -212,7 +163,7 @@ Deno.test("init - with tailwind", async () => {
   expect(dev).toMatch(/tailwind/);
 });
 
-Deno.test("init - with vscode", async () => {
+test("init - with vscode", async () => {
   await using tmp = await withTmpDir();
   const dir = tmp.dir;
   using _promptStub = stubPrompt(".");
@@ -225,64 +176,52 @@ Deno.test("init - with vscode", async () => {
   await expectProjectFile(dir, ".vscode/extensions.json");
 });
 
-Deno.test({
-  name: "init - fmt, lint, and type check project",
-  // Ignore this test on canary due to different formatting
-  // behaviours when the formatter changes.
-  ignore: Deno.version.deno.includes("+"),
-  fn: async () => {
-    await using tmp = await withTmpDir();
-    const dir = tmp.dir;
-    using _promptStub = stubPrompt(".");
-    using _confirmStub = stubConfirm();
-    await testInitProject(dir, [], { builder: true });
-    await expectProjectFile(dir, "main.ts");
-    await expectProjectFile(dir, "dev.ts");
+test("init - fmt, lint, and type check project", async () => {
+  await using tmp = await withTmpDir();
+  const dir = tmp.dir;
+  using _promptStub = stubPrompt(".");
+  using _confirmStub = stubConfirm();
+  await testInitProject(dir, [], { builder: true });
+  await expectProjectFile(dir, "main.ts");
+  await expectProjectFile(dir, "dev.ts");
 
-    await patchProject(dir);
+  await patchProject(dir);
 
-    const check = await new Deno.Command(Deno.execPath(), {
-      args: ["task", "check"],
-      cwd: dir,
-      stderr: "inherit",
-      stdout: "inherit",
-    }).output();
-    expect(check.code).toEqual(0);
-  },
+  const check = await runCommand(process.execPath, {
+    args: ["run", "check"],
+    cwd: dir,
+    stderr: "inherit",
+    stdout: "inherit",
+  });
+  expect(check.code).toEqual(0);
 });
 
-Deno.test(
-  "init with tailwind - fmt, lint, and type check project",
+test("init with tailwind - fmt, lint, and type check project", async () => {
+  await using tmp = await withTmpDir();
+  const dir = tmp.dir;
+  using _promptStub = stubPrompt(".");
+  using _confirmStub = stubConfirm({
+    [CONFIRM_TAILWIND_MESSAGE]: true,
+  });
+
+  await testInitProject(dir, [], { builder: true });
+  await expectProjectFile(dir, "main.ts");
+  await expectProjectFile(dir, "dev.ts");
+
+  await patchProject(dir);
+
+  const check = await runCommand(process.execPath, {
+    args: ["run", "check"],
+    cwd: dir,
+    stderr: "inherit",
+    stdout: "inherit",
+  });
+  expect(check.code).toEqual(0);
+});
+
+test.skipIf(process.platform === "win32" && process.env.CI !== undefined)(
+  "init - can start dev server",
   async () => {
-    await using tmp = await withTmpDir();
-    const dir = tmp.dir;
-    using _promptStub = stubPrompt(".");
-    using _confirmStub = stubConfirm({
-      [CONFIRM_TAILWIND_MESSAGE]: true,
-    });
-
-    await testInitProject(dir, [], { builder: true });
-    await expectProjectFile(dir, "main.ts");
-    await expectProjectFile(dir, "dev.ts");
-
-    await patchProject(dir);
-
-    const check = await new Deno.Command(Deno.execPath(), {
-      args: ["task", "check"],
-      cwd: dir,
-      stderr: "inherit",
-      stdout: "inherit",
-    }).output();
-    expect(check.code).toEqual(0);
-  },
-);
-
-Deno.test({
-  // TODO: For some reason this test is flaky in GitHub CI. It works when
-  // testing locally on windows though. Not sure what's going on.
-  ignore: Deno.build.os === "windows" && Deno.env.get("CI") !== undefined,
-  name: "init - can start dev server",
-  fn: async () => {
     await using tmp = await withTmpDir();
     const dir = tmp.dir;
     using _promptStub = stubPrompt(".");
@@ -293,7 +232,7 @@ Deno.test({
 
     await patchProject(dir);
     await withChildProcessServer(
-      { cwd: dir, args: ["task", "dev"] },
+      { cwd: dir, args: ["run", "dev"] },
       async (address) => {
         await withBrowser(async (page) => {
           await page.goto(address);
@@ -303,9 +242,9 @@ Deno.test({
       },
     );
   },
-});
+);
 
-Deno.test("init - can start built project", async () => {
+test("init - can start built project", async () => {
   await using tmp = await withTmpDir();
   const dir = tmp.dir;
   using _promptStub = stubPrompt(".");
@@ -317,16 +256,16 @@ Deno.test("init - can start built project", async () => {
   await patchProject(dir);
 
   // Build
-  await new Deno.Command(Deno.execPath(), {
-    args: ["task", "build"],
+  await runCommand(process.execPath, {
+    args: ["run", "build"],
     stdin: "null",
     stdout: "piped",
     stderr: "piped",
     cwd: dir,
-  }).output();
+  });
 
   await withChildProcessServer(
-    { cwd: dir, args: ["serve", "-A", "--port", "0", "_fresh/server.js"] },
+    { cwd: dir, args: ["_fresh/server.js"], env: { PORT: "0" } },
     async (address) => {
       await withBrowser(async (page) => {
         await page.goto(address);
@@ -337,7 +276,7 @@ Deno.test("init - can start built project", async () => {
   );
 });
 
-Deno.test("init - errors on missing build cache in prod", async () => {
+test("init - errors on missing build cache in prod", async () => {
   await using tmp = await withTmpDir();
   const dir = tmp.dir;
   using _promptStub = stubPrompt(".");
@@ -348,13 +287,13 @@ Deno.test("init - errors on missing build cache in prod", async () => {
 
   await patchProject(dir);
 
-  const cp = await new Deno.Command(Deno.execPath(), {
-    args: ["task", "start"],
+  const cp = await runCommand(process.execPath, {
+    args: ["run", "start"],
     stdin: "null",
     stdout: "piped",
     stderr: "piped",
     cwd: dir,
-  }).output();
+  });
 
   const { stderr } = getStdOutput(cp);
   expect(cp.code).toEqual(1);
@@ -362,8 +301,7 @@ Deno.test("init - errors on missing build cache in prod", async () => {
   expect(stderr).toMatch(/Module not found/);
 });
 
-// There is a peerDependency issue with links
-Deno.test.ignore("init - vite dev server", async () => {
+test("init - vite dev server", async () => {
   await using tmp = await withTmpDir();
   const dir = tmp.dir;
   using _promptStub = stubPrompt(".");
@@ -376,7 +314,7 @@ Deno.test.ignore("init - vite dev server", async () => {
   await patchProject(dir);
 
   await withChildProcessServer(
-    { cwd: dir, args: ["task", "dev"] },
+    { cwd: dir, args: ["run", "dev"] },
     async (address) => {
       await withBrowser(async (page) => {
         await page.goto(address);
@@ -387,8 +325,7 @@ Deno.test.ignore("init - vite dev server", async () => {
   );
 });
 
-// There is a peerDependency issue with links
-Deno.test.ignore("init - vite build", async () => {
+test("init - vite build", async () => {
   await using tmp = await withTmpDir();
   const dir = tmp.dir;
   using _promptStub = stubPrompt(".");
@@ -400,16 +337,16 @@ Deno.test.ignore("init - vite build", async () => {
   await patchProject(dir);
 
   // Build
-  await new Deno.Command(Deno.execPath(), {
-    args: ["task", "build"],
+  await runCommand(process.execPath, {
+    args: ["run", "build"],
     stdin: "null",
     stdout: "piped",
     stderr: "piped",
     cwd: dir,
-  }).output();
+  });
 
   await withChildProcessServer(
-    { cwd: dir, args: ["serve", "-A", "--port", "0", "_fresh/server.js"] },
+    { cwd: dir, args: ["_fresh/server.js"], env: { PORT: "0" } },
     async (address) => {
       await withBrowser(async (page) => {
         await page.goto(address);
@@ -420,7 +357,7 @@ Deno.test.ignore("init - vite build", async () => {
   );
 });
 
-Deno.test("init - with vite", async () => {
+test("init - with vite", async () => {
   await using tmp = await withTmpDir();
   const dir = tmp.dir;
   using _promptStub = stubPrompt(".");
