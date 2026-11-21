@@ -1,6 +1,7 @@
 import * as fs from "node:fs";
 import * as fsp from "node:fs/promises";
 import { createRequire } from "node:module";
+import * as net from "node:net";
 import { createBuilder } from "vite";
 import * as path from "@std/path";
 import { walk } from "fresh/internal-dev";
@@ -21,6 +22,28 @@ export const VITE_BIN = path.join(
   // deno-lint-ignore no-explicit-any
   (JSON.parse(fs.readFileSync(vitePkgPath, "utf-8")) as any).bin.vite,
 );
+
+/**
+ * Find a free TCP port. Vite's CLI treats `--port 0` as "not set" and falls
+ * back to 5173. On macOS `localhost` is dual-stack, so a second server can
+ * bind 5173 on the other address family instead of picking a new port and
+ * requests end up at the wrong server.
+ */
+export function getFreePort(): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const server = net.createServer();
+    server.unref();
+    server.on("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      const { port } = server.address() as net.AddressInfo;
+      server.close(() => resolve(port));
+    });
+  });
+}
+
+async function viteDevArgs(): Promise<string[]> {
+  return [VITE_BIN, "--port", String(await getFreePort()), "--strictPort"];
+}
 
 export async function updateFile(
   filePath: string,
@@ -88,7 +111,7 @@ export async function launchDevServer(
   await withChildProcessServer(
     {
       cwd: dir,
-      args: [VITE_BIN, "--port", "0"],
+      args: await viteDevArgs(),
       env,
     },
     async (address) => await fn(address, dir),
@@ -107,7 +130,7 @@ export async function spawnDevServer(
   const server = withChildProcessServer(
     {
       cwd: dir,
-      args: [VITE_BIN, "--port", "0"],
+      args: await viteDevArgs(),
       env,
     },
     async (address) => {
