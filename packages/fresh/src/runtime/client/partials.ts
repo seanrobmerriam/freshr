@@ -624,7 +624,7 @@ function revivePartials(
         }
       }
     } else if (partialCount === 0 && isElementNode(sib)) {
-      // Do not recurse if we know that we are inisde a partial
+      // Do not recurse if we know that we are inside a partial
       revivePartials(ctx, allProps, sib);
     }
 
