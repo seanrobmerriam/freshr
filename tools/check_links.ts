@@ -36,6 +36,7 @@ interface FailedLink {
 const checkedUrls = new Map<string, number>();
 const visitedPages = new Set<string>();
 const failedLinks: FailedLink[] = [];
+const rateLimitedLinks: FailedLink[] = [];
 const CONCURRENCY = 10;
 
 // deno-lint-ignore no-console
@@ -98,13 +99,26 @@ async function checkUrl(
   checkedUrls.set(url, 0);
 
   try {
-    const res = await fetch(url, {
-      method: "HEAD",
-      headers: { "User-Agent": "fresh-link-checker" },
-      redirect: "follow",
-    });
+    let res: Response;
+    for (let attempt = 0;; attempt++) {
+      res = await fetch(url, {
+        method: "HEAD",
+        headers: { "User-Agent": "fresh-link-checker" },
+        redirect: "follow",
+      });
+      // Rate limited: back off and retry, honoring `Retry-After`.
+      if (res.status !== 429 || attempt >= 3) break;
+      const retryAfter = Number(res.headers.get("retry-after"));
+      const delay = Number.isFinite(retryAfter) && retryAfter > 0
+        ? Math.min(retryAfter * 1000, 10_000)
+        : 1000 * 2 ** attempt;
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
     checkedUrls.set(url, res.status);
-    if (res.status >= 400) {
+    if (res.status === 429) {
+      // Still rate limited, which says nothing about the link itself.
+      rateLimitedLinks.push({ url, status: res.status, referrer });
+    } else if (res.status >= 400) {
       failedLinks.push({ url, status: res.status, referrer });
     }
     return res.status;
@@ -234,6 +248,15 @@ console.log(
 // Kill the server
 cp.kill();
 await cp.exited;
+
+if (rateLimitedLinks.length > 0) {
+  // deno-lint-ignore no-console
+  console.warn(`\nCould not check (rate limited): ${rateLimitedLinks.length}`);
+  for (const link of rateLimitedLinks) {
+    // deno-lint-ignore no-console
+    console.warn(`  ${link.status} ${link.url} (linked from ${link.referrer})`);
+  }
+}
 
 if (failedLinks.length > 0) {
   // deno-lint-ignore no-console
