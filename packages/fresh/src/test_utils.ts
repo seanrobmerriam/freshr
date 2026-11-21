@@ -156,7 +156,16 @@ const REPO_TSCONFIG = path.join(
 export const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export async function withTmpDir(
-  options?: { dir?: string; prefix?: string; suffix?: string },
+  options?: {
+    dir?: string;
+    prefix?: string;
+    suffix?: string;
+    /**
+     * Write a `tsconfig.json` extending the repository one into temp dirs
+     * created inside the repository. Default: `true`.
+     */
+    tsconfig?: boolean;
+  },
 ): Promise<{ dir: string } & AsyncDisposable> {
   const parent = options?.dir ?? os.tmpdir();
   await fsp.mkdir(parent, { recursive: true });
@@ -167,7 +176,7 @@ export async function withTmpDir(
     await fsp.rename(dir, dir + options.suffix);
     dir = dir + options.suffix;
   }
-  if (options?.dir !== undefined) {
+  if (options?.dir !== undefined && options.tsconfig !== false) {
     // Deno discovered the workspace `deno.json` from any nested directory.
     // Bun only looks for `tsconfig.json` between the file and the current
     // working directory, so give temp projects inside the repo a config

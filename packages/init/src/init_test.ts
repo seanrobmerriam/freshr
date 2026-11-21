@@ -50,7 +50,8 @@ function withTmpDir(): Promise<{ dir: string } & AsyncDisposable> {
   // Windows need temporary files in the repository root
   if (process.platform === "win32") {
     const dir = path.join(import.meta.dirname!, "..", "..", "..", "..");
-    return withTmpDirBase({ dir, prefix: "tmp_" });
+    // Must stay empty: `init` refuses to write into a non-empty directory.
+    return withTmpDirBase({ dir, prefix: "tmp_", tsconfig: false });
   }
   return withTmpDirBase();
 }
