@@ -107,6 +107,12 @@ export interface TestChildServerOptions {
   env?: Record<string, string>;
 }
 
+/** Resolves after `ms`, without keeping the process alive. */
+const delay = (ms: number) =>
+  new Promise<void>((resolve) => {
+    setTimeout(resolve, ms).unref?.();
+  });
+
 /** How long to wait for a child process server to print its address. */
 const SERVER_STARTUP_TIMEOUT = 60_000;
 
@@ -195,9 +201,14 @@ export async function withChildProcessServer(
   } finally {
     cp.kill();
     await cp.status;
-    for await (const line of lines) {
-      output.push(line);
-    }
+    // Collect the remaining output, but don't wait forever in case another
+    // process still holds the pipes open.
+    const rest = (async () => {
+      for await (const line of lines) {
+        output.push(line);
+      }
+    })();
+    await Promise.race([rest, delay(5_000)]);
 
     if (failed) {
       // deno-lint-ignore no-console
@@ -454,8 +465,23 @@ export function spawnCommand(bin: string, options: CommandOptions = {}): {
     stdout: proc.stdout,
     stderr: proc.stderr,
     status: proc.exited,
-    kill: () => proc.kill(),
+    kill: () => killTree(proc),
   };
+}
+
+/**
+ * Kill a process and its children. On Windows killing a process doesn't
+ * kill its children (e.g. `bun run dev` -> vite -> esbuild), which then keep
+ * the inherited stdout/stderr pipes open.
+ */
+function killTree(proc: { pid: number; kill(): void }) {
+  if (process.platform === "win32") {
+    Bun.spawnSync(["taskkill", "/pid", String(proc.pid), "/T", "/F"], {
+      stdout: "ignore",
+      stderr: "ignore",
+    });
+  }
+  proc.kill();
 }
 
 export function getStdOutput(
