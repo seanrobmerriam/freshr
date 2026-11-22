@@ -107,6 +107,9 @@ export interface TestChildServerOptions {
   env?: Record<string, string>;
 }
 
+/** How long to wait for a child process server to print its address. */
+const SERVER_STARTUP_TIMEOUT = 60_000;
+
 export async function withChildProcessServer(
   options: TestChildServerOptions,
   fn: (address: string) => void | Promise<void>,
@@ -134,24 +137,51 @@ export async function withChildProcessServer(
   const output: string[] = [];
   let address = "";
   let found = false;
-  // @ts-ignore yes it does
-  for await (const raw of lines.values({ preventCancel: true })) {
-    const line = colors.stripAnsiCode(raw);
-    output.push(line);
-    const match = line.match(
-      /https?:\/\/[^:]+:\d+(\/\w+[-\w]*)*/g,
-    );
-    if (match) {
-      address = match[0];
-      found = true;
-      break;
+  let timedOut = false;
+
+  // Give up if the server doesn't print its address in time, so that the
+  // output ends up in the test log instead of the test silently timing out.
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<"timeout">((resolve) => {
+    timer = setTimeout(() => resolve("timeout"), SERVER_STARTUP_TIMEOUT);
+  });
+  const reader = lines.getReader();
+  try {
+    while (true) {
+      const read = reader.read();
+      // Rejects when the lock is released after a timeout
+      read.catch(() => {});
+      const result = await Promise.race([read, deadline]);
+      if (result === "timeout") {
+        timedOut = true;
+        break;
+      }
+      if (result.done) break;
+      const line = colors.stripAnsiCode(result.value);
+      output.push(line);
+      const match = line.match(
+        /https?:\/\/[^:]+:\d+(\/\w+[-\w]*)*/g,
+      );
+      if (match) {
+        address = match[0];
+        found = true;
+        break;
+      }
     }
+  } finally {
+    clearTimeout(timer);
+    reader.releaseLock();
   }
 
   if (!found) {
+    cp.kill();
     // deno-lint-ignore no-console
     console.log(output);
-    throw new Error(`Could not find server address`);
+    throw new Error(
+      timedOut
+        ? `Server didn't print its address within ${SERVER_STARTUP_TIMEOUT}ms`
+        : `Could not find server address`,
+    );
   }
 
   let failed = false;
