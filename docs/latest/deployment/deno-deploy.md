@@ -57,5 +57,5 @@ If your deployment fails to start:
    generates the server entry during the build step
 3. Check the deployment logs in the Deno Deploy dashboard for specific errors
 
-See the [Deno Deploy documentation](https://docs.deno.com/deploy/manual/) for
-more details.
+See the [Deno Deploy documentation](https://docs.deno.com/deploy/) for more
+details.

@@ -1,19 +1,21 @@
+import { test } from "bun:test";
 import { expect } from "@std/expect";
-import { satisfies, tryParseRange } from "@std/semver";
-import { parse } from "@std/semver/parse";
-import rootConfig from "../../../deno.json" with { type: "json" };
-import freshConfig from "../deno.json" with { type: "json" };
+import freshConfig from "../package.json" with { type: "json" };
+import { FRESH_VERSION } from "../../update/src/update.ts";
+import initConfig from "../../init/package.json" with { type: "json" };
+import * as fsp from "node:fs/promises";
+import * as path from "@std/path";
 
-Deno.test("Fresh version consistency", () => {
-  const freshImport: string = rootConfig.imports.fresh;
-  const rangeStr = freshImport.split("@").pop()!;
-  const importRange = tryParseRange(rangeStr);
+test("Fresh version consistency", async () => {
+  // The version written into new and updated projects must match the
+  // version of the core package.
+  expect(FRESH_VERSION).toEqual(freshConfig.version);
 
-  if (importRange === undefined) {
-    throw new Error(`Could not parse semver range from: ${freshImport}`);
-  }
-
-  const packageVersion = parse(freshConfig.version);
-
-  expect(satisfies(packageVersion, importRange)).toBe(true);
+  const initSource = await fsp.readFile(
+    path.join(import.meta.dirname!, "..", "..", "init", "src", "init.ts"),
+    "utf-8",
+  );
+  const match = initSource.match(/const FRESH_VERSION = "([^"]+)"/);
+  expect(match?.[1]).toEqual(freshConfig.version);
+  expect(initConfig.version).toEqual(freshConfig.version);
 });

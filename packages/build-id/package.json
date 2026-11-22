@@ -1,0 +1,12 @@
+{
+  "name": "@fresh/build-id",
+  "version": "1.0.1",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./mod.ts"
+  },
+  "dependencies": {
+    "@std/encoding": "npm:@jsr/std__encoding@^1.0.10"
+  }
+}

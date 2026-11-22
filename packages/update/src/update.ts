@@ -1,9 +1,12 @@
+import * as fsp from "node:fs/promises";
 import * as path from "@std/path";
 import * as JSONC from "@std/jsonc";
 import * as tsmorph from "ts-morph";
 import * as colors from "@std/fmt/colors";
 import { ProgressBar } from "@std/cli/unstable-progress-bar";
-import { walk } from "@std/fs/walk";
+import { walk } from "./walk.ts";
+import { formatFile } from "./format.ts";
+import { Writable } from "node:stream";
 
 export const SyntaxKind = tsmorph.ts.SyntaxKind;
 
@@ -15,55 +18,193 @@ export const PREACT_SIGNALS_VERSION = "2.9.0";
 // dependency caches, and common build output folders.
 const SKIP_DIRS =
   /(?:[\\/]\.[^\\/]+(?:[\\/]|$)|[\\/](node_modules|vendor|\.git|\.next|\.turbo|_fresh|dist|target|\.cache)(?:[\\/]|$))/;
+
 export interface DenoJson {
   lock?: boolean;
   tasks?: Record<string, string>;
   name?: string;
   version?: string;
   imports?: Record<string, string>;
+  compilerOptions?: {
+    jsx?: string;
+    jsxImportSource?: string;
+  };
 }
 
-async function format(filePath: string) {
-  const command = new Deno.Command(Deno.execPath(), {
-    args: ["fmt", filePath],
-  });
-  await command.output();
+export interface PackageJson {
+  name?: string;
+  version?: string;
+  private?: boolean;
+  type?: string;
+  scripts?: Record<string, string>;
+  dependencies?: Record<string, string>;
+  devDependencies?: Record<string, string>;
+  [key: string]: unknown;
 }
 
-async function writeFormatted(filePath: string, content: string) {
-  await Deno.writeTextFile(filePath, content);
-  await format(filePath);
+export interface TsConfig {
+  compilerOptions?: Record<string, unknown> & {
+    paths?: Record<string, string[]>;
+  };
+  [key: string]: unknown;
 }
 
-async function updateDenoJson(
+async function readJsonFile<T>(filePath: string): Promise<T | null> {
+  try {
+    return JSONC.parse(await fsp.readFile(filePath, "utf-8")) as T;
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException)?.code === "ENOENT") return null;
+    throw err;
+  }
+}
+
+async function writeJsonFile(filePath: string, value: unknown) {
+  await fsp.writeFile(filePath, JSON.stringify(value, null, 2) + "\n");
+}
+
+async function readDenoJson(
   dir: string,
-  fn: (json: DenoJson) => void | Promise<void>,
-): Promise<void> {
-  let filePath = path.join(dir, "deno.json");
-  try {
-    const config = JSON.parse(await Deno.readTextFile(filePath)) as DenoJson;
-    await fn(config);
-    await writeFormatted(filePath, JSON.stringify(config));
-    return;
-  } catch (err) {
-    if (!(err instanceof Deno.errors.NotFound)) {
-      throw err;
+): Promise<{ config: DenoJson; filePath: string } | null> {
+  for (const name of ["deno.json", "deno.jsonc"]) {
+    const filePath = path.join(dir, name);
+    const config = await readJsonFile<DenoJson>(filePath);
+    if (config !== null) return { config, filePath };
+  }
+  return null;
+}
+
+const REMOVED_DEPS = [
+  "$fresh/",
+  "@preact/signals-core",
+  "preact-render-to-string",
+];
+
+/**
+ * Convert a Deno import map entry into a `package.json` dependency.
+ * Returns `null` when the entry isn't a package (e.g. a local path alias).
+ */
+export function importToDependency(
+  name: string,
+  specifier: string,
+): [string, string] | null {
+  if (name.endsWith("/")) return null;
+
+  let match = specifier.match(
+    /^npm:\/?((?:@[^/@]+\/)?[^/@]+)(?:@([^/]+))?\/?$/,
+  );
+  if (match !== null) {
+    const [, pkg, version = "*"] = match;
+    return [name, pkg === name ? version : `npm:${pkg}@${version}`];
+  }
+
+  match = specifier.match(/^jsr:\/?@([^/@]+)\/([^/@]+)(?:@([^/]+))?\/?$/);
+  if (match !== null) {
+    const [, scope, pkg, version = "*"] = match;
+    return [name, `npm:@jsr/${scope}__${pkg}@${version}`];
+  }
+
+  return null;
+}
+
+const DENO_TASKS: Record<string, string> = {
+  "deno run -A --watch=static/,routes/ dev.ts": "bun --watch dev.ts",
+  "deno run -A dev.ts": "bun dev.ts",
+  "deno run -A dev.ts build": "bun dev.ts build",
+  "deno run -A main.ts": "bun main.ts",
+  "deno serve -A _fresh/server.js": "bun _fresh/server.js",
+  "vite": "bun --bun vite",
+  "vite build": "bun --bun vite build",
+  "deno run -A -r jsr:@fresh/update .": "bunx @fresh/update@latest .",
+  "deno run -A -r https://usefresh.dev/update .": "bunx @fresh/update@latest .",
+  "deno fmt --check && deno lint && deno check": "tsc --noEmit",
+  "deno fmt --check . && deno lint . && deno check": "tsc --noEmit",
+  "deno fmt --check && deno lint && deno check **/*.ts && deno check **/*.tsx":
+    "tsc --noEmit",
+};
+
+const REMOVED_TASKS: Record<string, string[]> = {
+  manifest: ["deno task cli manifest $(pwd)"],
+  cli: [
+    "echo \"import '\\$fresh/src/dev/cli.ts'\" | deno run --unstable -A -",
+    "echo \"import '$fresh/src/dev/cli.ts'\" | deno run --unstable -A -",
+  ],
+};
+
+function setFreshDependencies(deps: Record<string, string>) {
+  deps["fresh"] = `npm:@fresh/core@^${FRESH_VERSION}`;
+  deps["preact"] = `^${PREACT_VERSION}`;
+  deps["@preact/signals"] = `^${PREACT_SIGNALS_VERSION}`;
+  for (const name of REMOVED_DEPS) {
+    delete deps[name];
+  }
+}
+
+/**
+ * Update `package.json` and `tsconfig.json` of a project. When the project
+ * still uses a `deno.json`, its import map and tasks are migrated.
+ */
+async function updateConfig(dir: string): Promise<void> {
+  const pkgPath = path.join(dir, "package.json");
+  const tsconfigPath = path.join(dir, "tsconfig.json");
+  const deno = await readDenoJson(dir);
+
+  const pkg: PackageJson = await readJsonFile<PackageJson>(pkgPath) ?? {
+    name: deno?.config.name?.replace(/^@[^/]+\//, "") ??
+      path.basename(dir).toLowerCase().replace(/[^a-z0-9._~-]+/g, "-"),
+    private: true,
+    type: "module",
+  };
+  pkg.dependencies ??= {};
+  pkg.scripts ??= {};
+
+  const paths: Record<string, string[]> = {};
+
+  if (deno !== null) {
+    const { config } = deno;
+
+    for (const [name, spec] of Object.entries(config.imports ?? {})) {
+      if (REMOVED_DEPS.includes(name)) continue;
+      const dep = importToDependency(name, spec);
+      if (dep !== null) {
+        pkg.dependencies[dep[0]] ??= dep[1];
+      } else if (spec.startsWith("./") || spec.startsWith("../")) {
+        // Local path alias, e.g. `"@/": "./"`
+        const key = name.endsWith("/") ? `${name}*` : name;
+        const value = spec.endsWith("/") ? `${spec}*` : spec;
+        paths[key] = [value];
+      }
+    }
+
+    for (const [name, task] of Object.entries(config.tasks ?? {})) {
+      if (REMOVED_TASKS[name]?.includes(task)) continue;
+      pkg.scripts[name] ??= DENO_TASKS[task] ?? task;
     }
   }
 
-  filePath = path.join(dir, "deno.jsonc");
-  try {
-    const config = JSONC.parse(await Deno.readTextFile(filePath)) as DenoJson;
-    await fn(config);
-    await writeFormatted(filePath, JSON.stringify(config));
-    return;
-  } catch (err) {
-    if (!(err instanceof Deno.errors.NotFound)) {
-      throw err;
-    }
+  setFreshDependencies(pkg.dependencies);
+
+  const tsconfig: TsConfig = await readJsonFile<TsConfig>(tsconfigPath) ?? {};
+  tsconfig.compilerOptions ??= {};
+  const co = tsconfig.compilerOptions;
+  co.jsx = "react-jsx";
+  co.jsxImportSource = "preact";
+  if (Object.keys(paths).length > 0) {
+    co.paths = { ...paths, ...co.paths };
   }
 
-  throw new Error(`Could not find deno.json or deno.jsonc in: ${dir}`);
+  await writeJsonFile(pkgPath, pkg);
+  await writeJsonFile(tsconfigPath, tsconfig);
+
+  if (deno !== null) {
+    // deno-lint-ignore no-console
+    console.log(
+      colors.italic(
+        `Migrated ${
+          path.basename(deno.filePath)
+        } to package.json and tsconfig.json. It's no longer used and can be deleted.`,
+      ),
+    );
+  }
 }
 
 export interface ImportState {
@@ -87,20 +228,16 @@ const compat = new Set([
 ]);
 
 async function detectFresh2(dir: string): Promise<boolean> {
-  for (const filename of ["deno.json", "deno.jsonc"]) {
-    try {
-      const content = await Deno.readTextFile(path.join(dir, filename));
-      const config = JSONC.parse(content) as DenoJson;
-      const imports = config.imports;
-      if (imports) {
-        // Fresh 2 uses "fresh" or "@fresh/core" as the import specifier
-        if (imports["fresh"]?.includes("@fresh/core")) {
-          return true;
-        }
-      }
-    } catch {
-      // File doesn't exist, try next
-    }
+  const pkg = await readJsonFile<PackageJson>(path.join(dir, "package.json"));
+  const deps = { ...pkg?.dependencies, ...pkg?.devDependencies };
+  if (deps["fresh"]?.includes("@fresh/core") || "@fresh/core" in deps) {
+    return true;
+  }
+
+  const deno = await readDenoJson(dir);
+  // Fresh 2 uses "fresh" or "@fresh/core" as the import specifier
+  if (deno?.config.imports?.["fresh"]?.includes("@fresh/core")) {
+    return true;
   }
   return false;
 }
@@ -129,56 +266,7 @@ export async function updateProject(dir: string) {
   console.log(colors.yellow("📝 Updating configuration files..."));
 
   // Update config
-  await updateDenoJson(dir, (config) => {
-    if (config.imports !== null && typeof config.imports !== "object") {
-      config.imports = {};
-    }
-
-    config.imports["fresh"] = `jsr:@fresh/core@^${FRESH_VERSION}`;
-    config.imports["preact"] = `npm:preact@^${PREACT_VERSION}`;
-    config.imports["@preact/signals"] =
-      `npm:@preact/signals@^${PREACT_SIGNALS_VERSION}`;
-    delete config.imports["$fresh/"];
-    delete config.imports["@preact/signals-core"];
-    delete config.imports["preact-render-to-string"];
-
-    // We should always use a lockfile going forwards
-    if ("lock" in config) {
-      delete config.lock;
-    }
-
-    // Update Fresh 1.x tasks
-    const tasks = config.tasks;
-    if (tasks !== undefined) {
-      if (tasks.manifest === "deno task cli manifest $(pwd)") {
-        delete tasks.manifest;
-      }
-
-      if (
-        tasks.cli ===
-          "echo \"import '\\$fresh/src/dev/cli.ts'\" | deno run --unstable -A -" ||
-        tasks.cli ===
-          "echo \"import '$fresh/src/dev/cli.ts'\" | deno run --unstable -A -"
-      ) {
-        delete tasks.cli;
-      }
-
-      if (tasks.update === "deno run -A -r https://usefresh.dev/update .") {
-        tasks.update = "deno run -A -r jsr:@fresh/update .";
-      }
-
-      if (
-        tasks.check ===
-          "deno fmt --check && deno lint && deno check **/*.ts && deno check **/*.tsx"
-      ) {
-        tasks.check = "deno fmt --check && deno lint && deno check";
-      }
-
-      if (tasks.preview === "deno run -A main.ts") {
-        tasks.preview = "deno serve -A _fresh/server.js";
-      }
-    }
-  });
+  await updateConfig(dir);
 
   // add completion log
   // deno-lint-ignore no-console
@@ -187,11 +275,11 @@ export async function updateProject(dir: string) {
   // Delete fresh.gen.ts if it exists (no longer needed in Fresh 2.0)
   const freshGenPath = path.join(dir, "fresh.gen.ts");
   try {
-    await Deno.remove(freshGenPath);
+    await fsp.rm(freshGenPath);
     // deno-lint-ignore no-console
     console.log(colors.cyan("🗑️ Deleted fresh.gen.ts (no longer needed)"));
   } catch (err) {
-    if (!(err instanceof Deno.errors.NotFound)) {
+    if (!((err as NodeJS.ErrnoException)?.code === "ENOENT")) {
       // deno-lint-ignore no-console
       console.error(
         `Could not delete fresh.gen.ts: ${
@@ -247,6 +335,7 @@ export async function updateProject(dir: string) {
 
   // Create a progress bar
   const bar = new ProgressBar({
+    writable: Writable.toWeb(process.stderr) as WritableStream<Uint8Array>,
     max: filesToProcess.length,
     formatter(x) {
       return `[${x.styledTime}] [${x.progressBar}] [${x.value}/${x.max} files]`;
@@ -510,7 +599,7 @@ async function updateFile(sourceFile: tsmorph.SourceFile): Promise<boolean> {
   }
 
   await sourceFile.save();
-  await format(sourceFile.getFilePath());
+  await formatFile(sourceFile.getFilePath());
 
   // Check if the file was actually modified
   const finalText = sourceFile.getFullText();

@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import type { Plugin } from "vite";
 
 export function buildIdPlugin(): Plugin {
@@ -43,21 +44,24 @@ export function setBuildId(id) {
 }
 
 export async function getBuildId(dev: boolean): Promise<string> {
-  const gitRevision = Deno.env.get("DENO_DEPLOYMENT_ID") ??
-    Deno.env.get("DENO_DEPLOY_BUILD_ID") ??
-    Deno.env.get("GITHUB_SHA") ??
-    Deno.env.get("CI_COMMIT_SHA");
+  const gitRevision = process.env.FRESH_DEPLOYMENT_ID ??
+    process.env.DENO_DEPLOYMENT_ID ??
+    process.env.DENO_DEPLOY_BUILD_ID ??
+    process.env.GITHUB_SHA ??
+    process.env.CI_COMMIT_SHA;
   if (gitRevision !== undefined) {
     return gitRevision.trim();
   }
 
   if (!dev) {
     try {
-      const bin = Deno.build.os === "windows" ? "git.exe" : "git";
-      const res = await new Deno.Command(bin, { args: ["rev-parse", "HEAD"] })
-        .output();
-
-      return new TextDecoder().decode(res.stdout).trim();
+      const bin = process.platform === "win32" ? "git.exe" : "git";
+      const res = spawnSync(bin, ["rev-parse", "HEAD"], {
+        encoding: "utf-8",
+      });
+      if (res.status === 0 && res.stdout) {
+        return res.stdout.trim();
+      }
     } catch {
       // ignore
     }

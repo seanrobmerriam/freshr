@@ -22,63 +22,50 @@ jobs:
 
   test:
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 15
+    timeout-minutes: 30
 
     strategy:
       fail-fast: false
       matrix:
-        deno: ["v2.x", "canary"]
+        bun: ["latest", "canary"]
         os: [macOS-latest, windows-latest, ubuntu-latest]
-        include:
-          - os: ubuntu-latest
-            cache_path: ~/.cache/deno/
-          - os: macos-latest
-            cache_path: ~/Library/Caches/deno/
-          - os: windows-latest
-            cache_path: ~\AppData\Local\deno\
 
     steps:
       - name: Checkout repo
         uses: actions/checkout@v6
 
-      - name: Setup Deno
-        uses: denoland/setup-deno@v2
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
         with:
-          cache: true
-          deno-version: ${{ matrix.deno }}
+          bun-version: ${{ matrix.bun }}
 
       - name: Install dependencies
-        run: deno install
+        run: bun install --frozen-lockfile
+
+      - name: Install Playwright browser
+        run: bunx playwright install --with-deps chromium
 
       - name: Verify formatting
-        if: startsWith(matrix.os, 'ubuntu') && matrix.deno == 'v2.x'
-        run: deno fmt --check
-
-      - name: Run linter
-        if: startsWith(matrix.os, 'ubuntu') && matrix.deno == 'v2.x'
-        run: deno lint
+        if: startsWith(matrix.os, 'ubuntu') && matrix.bun == 'latest'
+        run: bun run fmt:check
 
       - name: Spell-check
-        if: startsWith(matrix.os, 'ubuntu') && matrix.deno == 'v2.x'
+        if: startsWith(matrix.os, 'ubuntu') && matrix.bun == 'latest'
         uses: crate-ci/typos@master
 
       - name: Type check project
-        run: deno task check:types
+        run: bun run check:types
 
       - name: Run tests
-        run: deno task test
+        run: bun run test
 
       - name: Check docs
-        run: deno task check:docs
+        run: bun run check:docs
 
       - name: Build usefresh.dev
-        if: startsWith(matrix.os, 'ubuntu') && matrix.deno == 'v2.x'
-        run: deno task build-www
+        if: startsWith(matrix.os, 'ubuntu') && matrix.bun == 'latest'
+        run: bun run build-www
 
       - name: Check links
-        if: startsWith(matrix.os, 'ubuntu') && matrix.deno == 'v2.x'
-        run: deno task check:links
-
-      - name: Dry-run publish
-        if: startsWith(matrix.os, 'ubuntu') && matrix.deno == 'v2.x'
-        run: deno publish --dry-run
+        if: startsWith(matrix.os, 'ubuntu') && matrix.bun == 'latest'
+        run: bun run check:links

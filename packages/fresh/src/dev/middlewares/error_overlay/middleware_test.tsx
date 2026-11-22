@@ -1,10 +1,11 @@
+import { test } from "bun:test";
 import { expect } from "@std/expect";
 import { App } from "../../../app.ts";
 import { FakeServer } from "../../../test_utils.ts";
 import { devErrorOverlay } from "./middleware.tsx";
 import { HttpError } from "../../../error.ts";
 
-Deno.test("error overlay - show when error is thrown", async () => {
+test("error overlay - show when error is thrown", async () => {
   const app = new App();
   app.use(devErrorOverlay());
   app.config.mode = "development";
@@ -23,7 +24,7 @@ Deno.test("error overlay - show when error is thrown", async () => {
   expect(content).toContain("fresh-error-overlay");
 });
 
-Deno.test("error overlay - should not be visible for HttpError <500", async () => {
+test("error overlay - should not be visible for HttpError <500", async () => {
   const app = new App();
   app.use(devErrorOverlay());
   app.config.mode = "development";
@@ -56,36 +57,33 @@ Deno.test("error overlay - should not be visible for HttpError <500", async () =
   expect(res.status).toEqual(500);
 });
 
-Deno.test(
-  "error overlay - should not be visible for HttpError <500 #2",
-  async () => {
-    const app = new App();
-    app.use(devErrorOverlay());
-    app.config.mode = "development";
-    app
-      .use(async (ctx) => {
-        try {
-          return await ctx.next();
-        } catch {
-          return ctx.render(<p>ok</p>);
-        }
-      })
-      .get("/", () => {
-        throw new HttpError(404);
-      });
-
-    const server = new FakeServer(app.handler());
-    const res = await server.get("/", {
-      headers: {
-        accept: "text/html",
-      },
+test("error overlay - should not be visible for HttpError <500 #2", async () => {
+  const app = new App();
+  app.use(devErrorOverlay());
+  app.config.mode = "development";
+  app
+    .use(async (ctx) => {
+      try {
+        return await ctx.next();
+      } catch {
+        return ctx.render(<p>ok</p>);
+      }
+    })
+    .get("/", () => {
+      throw new HttpError(404);
     });
-    const content = await res.text();
-    expect(content).not.toContain("fresh-error-overlay");
-  },
-);
 
-Deno.test("error overlay - should not be visible in prod", async () => {
+  const server = new FakeServer(app.handler());
+  const res = await server.get("/", {
+    headers: {
+      accept: "text/html",
+    },
+  });
+  const content = await res.text();
+  expect(content).not.toContain("fresh-error-overlay");
+});
+
+test("error overlay - should not be visible in prod", async () => {
   const app = new App({ mode: "production" });
   app.use(devErrorOverlay());
 

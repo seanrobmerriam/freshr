@@ -52,7 +52,7 @@ export interface IpFilterOptions {
   onBlocked?: <State>(
     remote: {
       addr: string;
-      type: Deno.NetworkInterfaceInfo["family"];
+      type: "IPv4" | "IPv6";
     },
     ctx: Context<State>,
   ) => Response | Promise<Response>;

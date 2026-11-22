@@ -1,8 +1,10 @@
+import * as fs from "node:fs";
+import * as fsp from "node:fs/promises";
 // deno-lint-ignore-file no-console
 import * as colors from "@std/fmt/colors";
 import * as path from "@std/path";
 import * as semver from "@std/semver";
-import initConfig from "../deno.json" with { type: "json" };
+import initConfig from "../package.json" with { type: "json" };
 
 // Keep these as is, as we replace these version in our release script
 const FRESH_VERSION = "2.3.3";
@@ -48,13 +50,13 @@ Initialize a new Fresh project. This will create all the necessary files
 for a new project.
 
 To generate a project in the './foobar' subdirectory:
-    ${colors.rgb8("deno run -Ar jsr:@fresh/init ./foobar", 245)}
+    ${colors.rgb8("bunx @fresh/init ./foobar", 245)}
 
 To generate a project in the current directory:
-    ${colors.rgb8("deno run -Ar jsr:@fresh/init .", 245)}
+    ${colors.rgb8("bunx @fresh/init .", 245)}
 
 ${colors.rgb8("USAGE:", 3)}
-    ${colors.rgb8("deno run -Ar jsr:@fresh/init [DIRECTORY]", 245)}
+    ${colors.rgb8("bunx @fresh/init [DIRECTORY]", 245)}
 
 ${colors.rgb8("OPTIONS:", 3)}
     ${colors.rgb8("--force", 2)}      Overwrite existing files
@@ -76,7 +78,7 @@ export const CONFIRM_VITE_MESSAGE = `Set up ${
 } for build tooling?`;
 
 export async function initProject(
-  cwd = Deno.cwd(),
+  cwd = process.cwd(),
   input: (string | number)[],
   flags: {
     docker?: boolean | null;
@@ -124,7 +126,7 @@ export async function initProject(
   const projectDir = path.resolve(cwd, unresolvedDirectory);
 
   try {
-    const dir = [...Deno.readDirSync(projectDir)];
+    const dir = fs.readdirSync(projectDir, { withFileTypes: true });
     const isEmpty = dir.length === 0 ||
       dir.length === 1 && dir[0].name === ".git";
     if (
@@ -134,7 +136,7 @@ export async function initProject(
       error("Directory is not empty.");
     }
   } catch (err) {
-    if (!(err instanceof Deno.errors.NotFound)) {
+    if (!((err as NodeJS.ErrnoException)?.code === "ENOENT")) {
       throw err;
     }
   }
@@ -181,21 +183,21 @@ vendor/
   await writeFile(".gitignore", GITIGNORE);
 
   if (useDocker) {
-    const DENO_VERSION = Deno.version.deno;
+    const BUN_VERSION = typeof Bun !== "undefined" ? Bun.version : "1";
     const DOCKERFILE_TEXT = `
-FROM denoland/deno:${DENO_VERSION}
+FROM oven/bun:${BUN_VERSION}
 
 ARG GIT_REVISION
-ENV DENO_DEPLOYMENT_ID=\${GIT_REVISION}
+ENV FRESH_DEPLOYMENT_ID=\${GIT_REVISION}
 
 WORKDIR /app
 
 COPY . .
-RUN deno cache _fresh/server.js
+RUN bun install --frozen-lockfile
 
 EXPOSE 8000
 
-CMD ["serve", "-A", "_fresh/server.js"]
+CMD ["bun", "_fresh/server.js"]
 
 `;
     await writeFile("Dockerfile", DOCKERFILE_TEXT);
@@ -502,8 +504,10 @@ export default define.page(function App({ Component }) {
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <title>${path.basename(projectDir)}</title>${
-    useVite ? "" : `\n        <link rel="stylesheet" href="/styles.css" />`
-  }
+          useVite
+            ? ""
+            : `\n        <link rel="stylesheet" href="/styles.css" />`
+        }
       </head>
       <body>
         <Component />
@@ -543,13 +547,13 @@ export default function Counter(props: CounterProps) {
 }`;
   await writeFile("islands/Counter.tsx", ISLANDS_COUNTER_TSX);
 
-  const DEV_TS = `#!/usr/bin/env -S deno run -A --watch=static/,routes/
+  const DEV_TS = `#!/usr/bin/env -S bun --watch
 ${useTailwind ? `import { tailwind } from "@fresh/plugin-tailwind";\n` : ""}
 import { Builder } from "fresh/dev";
 
 const builder = new Builder();
 ${useTailwind ? "tailwind(builder);" : ""}
-if (Deno.args.includes("build")) {
+if (process.argv.slice(2).includes("build")) {
   await builder.build();
 } else {
   await builder.listen(() => import("./main.ts"));
@@ -559,80 +563,78 @@ if (Deno.args.includes("build")) {
     await writeFile("dev.ts", DEV_TS);
   }
 
-  const denoJson = {
-    nodeModulesDir: "manual",
-    tasks: {
-      check: "deno fmt --check . && deno lint . && deno check",
-      dev: "deno run -A --watch=static/,routes/ dev.ts",
-      build: "deno run -A dev.ts build",
-      start: "deno serve -A _fresh/server.js",
-      update: "deno run -A -r jsr:@fresh/update .",
-    },
-    lint: {
-      rules: {
-        tags: ["fresh", "recommended"],
-      },
-    },
-    exclude: ["**/_fresh/*"],
-    imports: {
-      "@/": "./",
-      "fresh": `jsr:@fresh/core@^${freshVersion}`,
-      "preact": `npm:preact@^${PREACT_VERSION}`,
-      "@preact/signals": `npm:@preact/signals@^${PREACT_SIGNALS_VERSION}`,
+  const packageJson = {
+    name: toPackageName(path.basename(projectDir)),
+    private: true,
+    type: "module",
+    scripts: {
+      check: "tsc --noEmit",
+      dev: "bun --watch dev.ts",
+      build: "bun dev.ts build",
+      start: "bun _fresh/server.js",
+      update: "bunx @fresh/update@latest .",
     } as Record<string, string>,
+    dependencies: {
+      "fresh": `npm:@fresh/core@^${freshVersion}`,
+      "preact": `^${PREACT_VERSION}`,
+      "@preact/signals": `^${PREACT_SIGNALS_VERSION}`,
+    } as Record<string, string>,
+    devDependencies: {
+      "@types/bun": "latest",
+      "typescript": "^5.9.3",
+    } as Record<string, string>,
+  };
+
+  const tsconfigJson = {
     compilerOptions: {
-      lib: ["dom", "dom.asynciterable", "dom.iterable", "deno.ns"],
-      jsx: "precompile",
+      target: "ESNext",
+      module: "Preserve",
+      moduleResolution: "bundler",
+      moduleDetection: "force",
+      lib: ["ESNext", "DOM", "DOM.Iterable", "DOM.AsyncIterable"],
+      types: ["bun"],
+      jsx: "react-jsx",
       jsxImportSource: "preact",
-      jsxPrecompileSkipElements: [
-        "a",
-        "img",
-        "source",
-        "body",
-        "html",
-        "head",
-        "title",
-        "meta",
-        "script",
-        "link",
-        "style",
-        "base",
-        "noscript",
-        "template",
-      ],
+      allowImportingTsExtensions: true,
+      noEmit: true,
+      strict: true,
+      skipLibCheck: true,
+      paths: {
+        "@/*": ["./*"],
+      },
     } as Record<string, unknown>,
+    exclude: ["node_modules", "_fresh"],
   };
 
   if (useVite) {
-    denoJson.compilerOptions.types = ["vite/client"];
-    denoJson.tasks.dev = "vite";
-    denoJson.tasks.build = "vite build";
+    tsconfigJson.compilerOptions.types = ["bun", "vite/client"];
+    packageJson.scripts.dev = "bun --bun vite";
+    packageJson.scripts.build = "bun --bun vite build";
 
     const vitePluginVersion = await getLatestVersion(
       "@fresh/plugin-vite",
       FRESH_VITE_PLUGIN,
     );
 
-    denoJson.imports["@fresh/plugin-vite"] =
-      `jsr:@fresh/plugin-vite@^${vitePluginVersion}`;
-    denoJson.imports["vite"] = "npm:vite@^7.1.3";
-    denoJson.imports["@types/babel__core"] = "npm:@types/babel__core@^7.20.5";
+    packageJson.devDependencies["@fresh/plugin-vite"] = `^${vitePluginVersion}`;
+    packageJson.devDependencies["vite"] = "^7.1.3";
+    packageJson.devDependencies["@types/babel__core"] = "^7.20.5";
 
     if (useTailwind) {
-      denoJson.imports["tailwindcss"] =
-        `npm:tailwindcss@^${TAILWINDCSS_VERSION}`;
-      denoJson.imports["@tailwindcss/vite"] = `npm:@tailwindcss/vite@^4.1.12`;
+      packageJson.devDependencies["tailwindcss"] = `^${TAILWINDCSS_VERSION}`;
+      packageJson.devDependencies["@tailwindcss/vite"] = `^4.1.12`;
     }
   } else if (useTailwind) {
-    denoJson.imports["tailwindcss"] = `npm:tailwindcss@^${TAILWINDCSS_VERSION}`;
-    denoJson.imports["@fresh/plugin-tailwind"] =
-      `jsr:@fresh/plugin-tailwind@^${FRESH_TAILWIND_VERSION}`;
-    denoJson.imports["@tailwindcss/postcss"] =
-      `npm:@tailwindcss/postcss@^${TAILWINDCSS_POSTCSS_VERSION}`;
-    denoJson.imports["postcss"] = `npm:postcss@^${POSTCSS_VERSION}`;
+    packageJson.devDependencies["tailwindcss"] = `^${TAILWINDCSS_VERSION}`;
+    packageJson.devDependencies["@fresh/plugin-tailwind"] =
+      `^${FRESH_TAILWIND_VERSION}`;
+    packageJson.devDependencies["@tailwindcss/postcss"] =
+      `^${TAILWINDCSS_POSTCSS_VERSION}`;
+    packageJson.devDependencies["postcss"] = `^${POSTCSS_VERSION}`;
   }
 
-  await writeFile("deno.json", denoJson);
+  await writeFile("package.json", packageJson);
+  await writeFile("tsconfig.json", tsconfigJson);
 
   if (useVite) {
     let viteConfig = `import { defineConfig } from "vite";
@@ -656,13 +658,14 @@ Started" guide here: https://usefresh.dev/docs/getting-started
 
 ### Usage
 
-Make sure to install Deno:
-https://docs.deno.com/runtime/getting_started/installation
+Make sure to install Bun:
+https://bun.sh/docs/installation
 
-Then start the project in development mode:
+Then install the dependencies and start the project in development mode:
 
 \`\`\`
-deno task dev
+bun install
+bun run dev
 \`\`\`
 
 This will watch the project directory and restart as necessary.`;
@@ -670,21 +673,7 @@ This will watch the project directory and restart as necessary.`;
 
   if (useVSCode) {
     const vscodeSettings = {
-      "deno.enable": true,
-      "deno.lint": true,
-      "editor.defaultFormatter": "denoland.vscode-deno",
-      "[typescriptreact]": {
-        "editor.defaultFormatter": "denoland.vscode-deno",
-      },
-      "[typescript]": {
-        "editor.defaultFormatter": "denoland.vscode-deno",
-      },
-      "[javascriptreact]": {
-        "editor.defaultFormatter": "denoland.vscode-deno",
-      },
-      "[javascript]": {
-        "editor.defaultFormatter": "denoland.vscode-deno",
-      },
+      "typescript.tsdk": "node_modules/typescript/lib",
       "files.associations": useTailwind
         ? {
           "*.css": "tailwindcss",
@@ -694,17 +683,20 @@ This will watch the project directory and restart as necessary.`;
 
     await writeFile(".vscode/settings.json", vscodeSettings);
 
-    const recommendations = ["denoland.vscode-deno"];
+    const recommendations = ["oven.bun-vscode"];
     if (useTailwind) recommendations.push("bradlc.vscode-tailwindcss");
     await writeFile(".vscode/extensions.json", { recommendations });
   }
 
   if (!flags.skipInstall) {
     console.log("Installing dependencies...");
-    await new Deno.Command(Deno.execPath(), {
-      cwd: unresolvedDirectory,
-      args: ["install"],
-    }).output();
+    const proc = Bun.spawn([process.execPath, "install"], {
+      cwd: projectDir,
+      stdin: "ignore",
+      stdout: "ignore",
+      stderr: "inherit",
+    });
+    await proc.exited;
     console.log("Installing dependencies...%cdone!", "color: green");
   }
 
@@ -723,7 +715,7 @@ This will watch the project directory and restart as necessary.`;
     );
   }
   console.log(
-    "Run %cdeno task dev%c to start the project. %cCTRL-C%c to stop.",
+    "Run %cbun run dev%c to start the project. %cCTRL-C%c to stop.",
     "color: cyan",
     "",
     "color: cyan",
@@ -756,7 +748,7 @@ async function writeProjectFile(
     ...pathname.split("/").filter(Boolean),
   );
   try {
-    await Deno.mkdir(
+    await fsp.mkdir(
       path.dirname(filePath),
       { recursive: true },
     );
@@ -765,29 +757,36 @@ async function writeProjectFile(
       if (!content.endsWith("\n\n")) {
         formatted += "\n";
       }
-      await Deno.writeTextFile(filePath, formatted);
+      await fsp.writeFile(filePath, formatted);
     } else if (
       content instanceof Uint8Array || content instanceof ReadableStream
     ) {
-      await Deno.writeFile(filePath, content);
+      await fsp.writeFile(filePath, content);
     } else {
-      await Deno.writeTextFile(
+      await fsp.writeFile(
         filePath,
         JSON.stringify(content, null, 2) + "\n",
       );
     }
   } catch (err) {
-    if (!(err instanceof Deno.errors.AlreadyExists)) {
+    if (!((err as NodeJS.ErrnoException)?.code === "EEXIST")) {
       throw err;
     }
   }
 }
 
-interface JsrMeta {
-  scope: string;
-  name: string;
-  latest: string | null;
+interface NpmMeta {
+  "dist-tags"?: { latest?: string };
   versions: Record<string, unknown>;
+}
+
+/** Turn a directory name into a valid npm package name. */
+function toPackageName(name: string): string {
+  const out = name.toLowerCase()
+    .replace(/[^a-z0-9._~-]+/g, "-")
+    .replace(/^[._-]+/, "")
+    .replace(/-+$/, "");
+  return out || "fresh-project";
 }
 
 async function getLatestVersion(
@@ -800,11 +799,12 @@ async function getLatestVersion(
   }
 
   try {
-    const res = await fetch(`https://jsr.io/${pkg}/meta.json`);
-    const json = (await res.json()) as JsrMeta;
+    const res = await fetch(`https://registry.npmjs.org/${pkg}`);
+    const json = (await res.json()) as NpmMeta;
 
-    if (json.latest !== null) {
-      return json.latest;
+    const latest = json["dist-tags"]?.latest;
+    if (latest) {
+      return latest;
     }
 
     const versions = Object.keys(json.versions);

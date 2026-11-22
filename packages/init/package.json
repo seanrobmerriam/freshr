@@ -1,0 +1,19 @@
+{
+  "name": "@fresh/init",
+  "version": "2.3.3",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/mod.ts",
+    "./create": "./src/create.ts"
+  },
+  "bin": {
+    "fresh-init": "./src/mod.ts"
+  },
+  "dependencies": {
+    "@std/cli": "npm:@jsr/std__cli@^1.0.19",
+    "@std/fmt": "npm:@jsr/std__fmt@^1.0.8",
+    "@std/path": "npm:@jsr/std__path@^1.1.2",
+    "@std/semver": "npm:@jsr/std__semver@^1.0.6"
+  }
+}

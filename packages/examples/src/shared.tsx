@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 import type { ComponentChildren } from "preact";
 
 export function Doc(props: { children?: ComponentChildren }) {

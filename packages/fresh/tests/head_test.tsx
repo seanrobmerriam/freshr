@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 import { App, staticFiles } from "fresh";
 import { Head } from "fresh/runtime";
 import {
@@ -15,7 +16,7 @@ const applyHeadCache = await buildProd({
   root: path.join(import.meta.dirname!, "fixture_head"),
 });
 
-Deno.test("Head - ssr - updates title", async () => {
+test("Head - ssr - updates title", async () => {
   const handler = new App()
     .appWrapper(({ Component }) => {
       return (
@@ -50,7 +51,7 @@ Deno.test("Head - ssr - updates title", async () => {
   expect(doc.querySelector("h1")?.textContent).toEqual("heading");
 });
 
-Deno.test("Head - ssr - updates meta", async () => {
+test("Head - ssr - updates meta", async () => {
   const handler = new App()
     .appWrapper(({ Component }) => {
       return (
@@ -85,7 +86,7 @@ Deno.test("Head - ssr - updates meta", async () => {
   expect(meta.content).toEqual("ok");
 });
 
-Deno.test("Head - ssr - updates style", async () => {
+test("Head - ssr - updates style", async () => {
   const handler = new App()
     .appWrapper(({ Component }) => {
       return (
@@ -120,7 +121,7 @@ Deno.test("Head - ssr - updates style", async () => {
   expect(meta.textContent).toEqual("ok");
 });
 
-Deno.test("Head - ssr - merge keyed", async () => {
+test("Head - ssr - merge keyed", async () => {
   const handler = new App()
     .appWrapper(({ Component }) => {
       return (
@@ -156,7 +157,7 @@ Deno.test("Head - ssr - merge keyed", async () => {
   expect(last?.textContent).toEqual("ok");
 });
 
-Deno.test("Head - ssr - stylesheet links with different hrefs coexist", async () => {
+test("Head - ssr - stylesheet links with different hrefs coexist", async () => {
   const handler = new App()
     .appWrapper(({ Component }) => {
       return (
@@ -191,7 +192,7 @@ Deno.test("Head - ssr - stylesheet links with different hrefs coexist", async ()
   expect(hrefs).toContain("https://fonts.example.com/font.css");
 });
 
-Deno.test("Head - ssr - updates link", async () => {
+test("Head - ssr - updates link", async () => {
   const handler = new App()
     .appWrapper(({ Component }) => {
       return (

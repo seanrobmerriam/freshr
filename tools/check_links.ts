@@ -36,6 +36,7 @@ interface FailedLink {
 const checkedUrls = new Map<string, number>();
 const visitedPages = new Set<string>();
 const failedLinks: FailedLink[] = [];
+const rateLimitedLinks: FailedLink[] = [];
 const CONCURRENCY = 10;
 
 // deno-lint-ignore no-console
@@ -43,20 +44,24 @@ console.log("Starting server...");
 
 // Spawn the prod server directly to avoid importing test_utils.tsx
 // (which launches a headless browser at module scope)
-const cp = new Deno.Command(Deno.execPath(), {
-  args: ["serve", "-A", "--cached-only", "--port", "0", "_fresh/server.js"],
-  stdin: "null",
-  stdout: "piped",
-  stderr: "piped",
+const cp = Bun.spawn([process.execPath, "_fresh/server.js"], {
+  stdin: "ignore",
+  stdout: "pipe",
+  stderr: "pipe",
   cwd: www,
-}).spawn();
+  env: { ...process.env, PORT: "0" },
+});
 
 // Read server output to find the address
 const linesStdout = cp.stdout
-  .pipeThrough(new TextDecoderStream())
+  .pipeThrough(
+    new TextDecoderStream() as unknown as TransformStream<Uint8Array, string>,
+  )
   .pipeThrough(new TextLineStream());
 const linesStderr = cp.stderr
-  .pipeThrough(new TextDecoderStream())
+  .pipeThrough(
+    new TextDecoderStream() as unknown as TransformStream<Uint8Array, string>,
+  )
   .pipeThrough(new TextLineStream());
 const lines = mergeReadableStreams(linesStdout, linesStderr);
 
@@ -75,7 +80,7 @@ if (!address) {
   // deno-lint-ignore no-console
   console.error("Could not find server address");
   cp.kill();
-  Deno.exit(1);
+  process.exit(1);
 }
 
 // deno-lint-ignore no-console
@@ -94,13 +99,26 @@ async function checkUrl(
   checkedUrls.set(url, 0);
 
   try {
-    const res = await fetch(url, {
-      method: "HEAD",
-      headers: { "User-Agent": "fresh-link-checker" },
-      redirect: "follow",
-    });
+    let res: Response;
+    for (let attempt = 0;; attempt++) {
+      res = await fetch(url, {
+        method: "HEAD",
+        headers: { "User-Agent": "fresh-link-checker" },
+        redirect: "follow",
+      });
+      // Rate limited: back off and retry, honoring `Retry-After`.
+      if (res.status !== 429 || attempt >= 3) break;
+      const retryAfter = Number(res.headers.get("retry-after"));
+      const delay = Number.isFinite(retryAfter) && retryAfter > 0
+        ? Math.min(retryAfter * 1000, 10_000)
+        : 1000 * 2 ** attempt;
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
     checkedUrls.set(url, res.status);
-    if (res.status >= 400) {
+    if (res.status === 429) {
+      // Still rate limited, which says nothing about the link itself.
+      rateLimitedLinks.push({ url, status: res.status, referrer });
+    } else if (res.status >= 400) {
       failedLinks.push({ url, status: res.status, referrer });
     }
     return res.status;
@@ -141,7 +159,7 @@ async function crawlPage(pageUrl: URL, referrer: string) {
   }
 
   const text = await res.text();
-  Deno.stdout.writeSync(new TextEncoder().encode("."));
+  process.stdout.write(".");
   const doc = new DOMParser().parseFromString(text, "text/html");
 
   const linkChecks: Array<Promise<void>> = [];
@@ -229,7 +247,16 @@ console.log(
 
 // Kill the server
 cp.kill();
-await cp.status;
+await cp.exited;
+
+if (rateLimitedLinks.length > 0) {
+  // deno-lint-ignore no-console
+  console.warn(`\nCould not check (rate limited): ${rateLimitedLinks.length}`);
+  for (const link of rateLimitedLinks) {
+    // deno-lint-ignore no-console
+    console.warn(`  ${link.status} ${link.url} (linked from ${link.referrer})`);
+  }
+}
 
 if (failedLinks.length > 0) {
   // deno-lint-ignore no-console
@@ -240,9 +267,9 @@ if (failedLinks.length > 0) {
       `  ${link.status} ${link.url} (linked from ${link.referrer})`,
     );
   }
-  Deno.exit(1);
+  process.exit(1);
 }
 
 // deno-lint-ignore no-console
 console.log("\nAll links OK!");
-Deno.exit(0);
+process.exit(0);

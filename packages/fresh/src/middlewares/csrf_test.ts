@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 import { App } from "../app.ts";
 import type { Method } from "../router.ts";
 import { csrf, type CsrfOptions } from "./csrf.ts";
@@ -37,7 +38,7 @@ function createTests(trusted: CsrfOptions["origin"]) {
   };
 }
 
-Deno.test("CSRF - allow GET/HEAD/OPTIONS", async () => {
+test("CSRF - allow GET/HEAD/OPTIONS", async () => {
   const runTest = createTests("https://example.com");
 
   await runTest("GET", 200);
@@ -45,7 +46,7 @@ Deno.test("CSRF - allow GET/HEAD/OPTIONS", async () => {
   await runTest("OPTIONS", 200);
 });
 
-Deno.test("CSRF - Sec-Fetch-Site", async () => {
+test("CSRF - Sec-Fetch-Site", async () => {
   const runTest = createTests("https://example.com");
 
   await runTest("POST", 200, { secFetchSite: "same-origin" });
@@ -64,7 +65,7 @@ Deno.test("CSRF - Sec-Fetch-Site", async () => {
   await runTest("PUT", 403, { secFetchSite: "cross-site" });
 });
 
-Deno.test("CSRF - cross origin", async () => {
+test("CSRF - cross origin", async () => {
   const runTest = createTests("https://trusted.example.com");
 
   await runTest("POST", 200, { origin: "https://trusted.example.com" });
@@ -80,7 +81,7 @@ Deno.test("CSRF - cross origin", async () => {
   });
 });
 
-Deno.test("CSRF - array origin", async () => {
+test("CSRF - array origin", async () => {
   const runTest = createTests(
     ["https://example.com", "https://trusted.example.com"],
   );
@@ -90,7 +91,7 @@ Deno.test("CSRF - array origin", async () => {
   await runTest("POST", 403, { origin: "https://foo.example.com" });
 });
 
-Deno.test("CSRF - function origin", async () => {
+test("CSRF - function origin", async () => {
   const runTest = createTests(
     (origin) => origin === "https://example.com",
   );

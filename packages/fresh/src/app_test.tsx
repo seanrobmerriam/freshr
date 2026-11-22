@@ -1,9 +1,10 @@
+import { test } from "bun:test";
 import { expect } from "@std/expect";
 import { App } from "./app.ts";
 import { FakeServer } from "./test_utils.ts";
 import { HttpError } from "./error.ts";
 
-Deno.test("App - .use()", async () => {
+test("App - .use()", async () => {
   const app = new App<{ text: string }>()
     .use((ctx) => {
       ctx.state.text = "A";
@@ -21,7 +22,7 @@ Deno.test("App - .use()", async () => {
   expect(await res.text()).toEqual("AB");
 });
 
-Deno.test("App - .use() #2", async () => {
+test("App - .use() #2", async () => {
   const app = new App<{ text: string }>()
     .use(() => new Response("ok #1"))
     .get("/foo/bar", () => new Response("ok #2"))
@@ -33,7 +34,7 @@ Deno.test("App - .use() #2", async () => {
   expect(await res.text()).toEqual("ok #1");
 });
 
-Deno.test("App - .get()", async () => {
+test("App - .get()", async () => {
   const app = new App()
     .get("/", () => new Response("ok"))
     .get("/foo", () => new Response("ok"));
@@ -47,7 +48,7 @@ Deno.test("App - .get()", async () => {
   expect(await res.text()).toEqual("ok");
 });
 
-Deno.test("App - .get() with basePath", async () => {
+test("App - .get() with basePath", async () => {
   const app = new App({ basePath: "/foo/bar" })
     .get("/", () => new Response("ok"))
     .get("/foo", () => new Response("ok"));
@@ -65,7 +66,7 @@ Deno.test("App - .get() with basePath", async () => {
   expect(res.status).toEqual(200);
 });
 
-Deno.test("App - .post()", async () => {
+test("App - .post()", async () => {
   const app = new App<{ text: string }>()
     .get("/", () => new Response("fail"))
     .get("/foo", () => new Response("fail"))
@@ -81,7 +82,7 @@ Deno.test("App - .post()", async () => {
   expect(await res.text()).toEqual("ok");
 });
 
-Deno.test("App - .post() with basePath", async () => {
+test("App - .post() with basePath", async () => {
   const app = new App({ basePath: "/foo/bar" })
     .post("/", () => new Response("ok"))
     .post("/foo", () => new Response("ok"));
@@ -99,7 +100,7 @@ Deno.test("App - .post() with basePath", async () => {
   expect(res.status).toEqual(200);
 });
 
-Deno.test("App - .patch()", async () => {
+test("App - .patch()", async () => {
   const app = new App<{ text: string }>()
     .get("/", () => new Response("fail"))
     .get("/foo", () => new Response("fail"))
@@ -115,7 +116,7 @@ Deno.test("App - .patch()", async () => {
   expect(await res.text()).toEqual("ok");
 });
 
-Deno.test("App - .patch() with basePath", async () => {
+test("App - .patch() with basePath", async () => {
   const app = new App({ basePath: "/foo/bar" })
     .patch("/", () => new Response("ok"))
     .patch("/foo", () => new Response("ok"));
@@ -133,7 +134,7 @@ Deno.test("App - .patch() with basePath", async () => {
   expect(res.status).toEqual(200);
 });
 
-Deno.test("App - .put()", async () => {
+test("App - .put()", async () => {
   const app = new App<{ text: string }>()
     .get("/", () => new Response("fail"))
     .get("/foo", () => new Response("fail"))
@@ -149,7 +150,7 @@ Deno.test("App - .put()", async () => {
   expect(await res.text()).toEqual("ok");
 });
 
-Deno.test("App - .put() with basePath", async () => {
+test("App - .put() with basePath", async () => {
   const app = new App({ basePath: "/foo/bar" })
     .put("/", () => new Response("ok"))
     .put("/foo", () => new Response("ok"));
@@ -167,7 +168,7 @@ Deno.test("App - .put() with basePath", async () => {
   expect(res.status).toEqual(200);
 });
 
-Deno.test("App - .delete()", async () => {
+test("App - .delete()", async () => {
   const app = new App<{ text: string }>()
     .get("/", () => new Response("fail"))
     .get("/foo", () => new Response("fail"))
@@ -183,7 +184,7 @@ Deno.test("App - .delete()", async () => {
   expect(await res.text()).toEqual("ok");
 });
 
-Deno.test("App - .delete() with basePath", async () => {
+test("App - .delete() with basePath", async () => {
   const app = new App({ basePath: "/foo/bar" })
     .delete("/", () => new Response("ok"))
     .delete("/foo", () => new Response("ok"));
@@ -201,7 +202,7 @@ Deno.test("App - .delete() with basePath", async () => {
   expect(res.status).toEqual(200);
 });
 
-Deno.test("App - wrong method match", async () => {
+test("App - wrong method match", async () => {
   const app = new App<{ text: string }>()
     .get("/", () => new Response("ok"))
     .post("/", () => new Response("ok"));
@@ -217,7 +218,7 @@ Deno.test("App - wrong method match", async () => {
   expect(await res.text()).toEqual("ok");
 });
 
-Deno.test("App - non-standard method does not crash handler", async () => {
+test("App - non-standard method does not crash handler", async () => {
   // Regression test for https://github.com/denoland/fresh/issues/3804
   // WebDAV scanners (and other clients) routinely send verbs outside the
   // seven methods Fresh's router declares (GET/POST/PATCH/PUT/DELETE/HEAD/
@@ -244,7 +245,7 @@ Deno.test("App - non-standard method does not crash handler", async () => {
   expect(await res.text()).toEqual("Method Not Allowed");
 });
 
-Deno.test("App - methods with middleware", async () => {
+test("App - methods with middleware", async () => {
   const app = new App<{ text: string }>()
     .use((ctx) => {
       ctx.state.text = "A";
@@ -262,7 +263,7 @@ Deno.test("App - methods with middleware", async () => {
   expect(await res.text()).toEqual("A");
 });
 
-Deno.test("App - .mountApp() compose apps", async () => {
+test("App - .mountApp() compose apps", async () => {
   const innerApp = new App<{ text: string }>()
     .use((ctx) => {
       ctx.state.text = "A";
@@ -287,7 +288,7 @@ Deno.test("App - .mountApp() compose apps", async () => {
   expect(await res.text()).toEqual("A");
 });
 
-Deno.test("App - .mountApp() compose apps with .route()", async () => {
+test("App - .mountApp() compose apps with .route()", async () => {
   const innerApp = new App<{ text: string }>()
     .use((ctx) => {
       ctx.state.text = "A";
@@ -308,7 +309,7 @@ Deno.test("App - .mountApp() compose apps with .route()", async () => {
   expect(await res.text()).toEqual("A");
 });
 
-Deno.test("App - .mountApp() self mount, no middleware", async () => {
+test("App - .mountApp() self mount, no middleware", async () => {
   const innerApp = new App<{ text: string }>()
     .use((ctx) => {
       ctx.state.text = "A";
@@ -333,71 +334,65 @@ Deno.test("App - .mountApp() self mount, no middleware", async () => {
   expect(await res.text()).toEqual("A");
 });
 
-Deno.test(
-  "App - .mountApp() self mount, with middleware",
-  async () => {
-    const innerApp = new App<{ text: string }>()
-      .use(function B(ctx) {
-        ctx.state.text += "B";
-        return ctx.next();
-      })
-      .get("/foo", (ctx) => new Response(ctx.state.text))
-      .post("/foo", (ctx) => new Response(ctx.state.text));
+test("App - .mountApp() self mount, with middleware", async () => {
+  const innerApp = new App<{ text: string }>()
+    .use(function B(ctx) {
+      ctx.state.text += "B";
+      return ctx.next();
+    })
+    .get("/foo", (ctx) => new Response(ctx.state.text))
+    .post("/foo", (ctx) => new Response(ctx.state.text));
 
-    const app = new App<{ text: string }>()
-      .use(function A(ctx) {
-        ctx.state.text = "A";
-        return ctx.next();
-      })
-      .get("/", () => new Response("ok"))
-      .mountApp("/", innerApp);
+  const app = new App<{ text: string }>()
+    .use(function A(ctx) {
+      ctx.state.text = "A";
+      return ctx.next();
+    })
+    .get("/", () => new Response("ok"))
+    .mountApp("/", innerApp);
 
-    const server = new FakeServer(app.handler());
+  const server = new FakeServer(app.handler());
 
-    let res = await server.get("/");
-    expect(await res.text()).toEqual("ok");
+  let res = await server.get("/");
+  expect(await res.text()).toEqual("ok");
 
-    res = await server.get("/foo");
-    expect(await res.text()).toEqual("AB");
+  res = await server.get("/foo");
+  expect(await res.text()).toEqual("AB");
 
-    res = await server.post("/foo");
-    expect(await res.text()).toEqual("AB");
-  },
-);
+  res = await server.post("/foo");
+  expect(await res.text()).toEqual("AB");
+});
 
-Deno.test(
-  "App - .mountApp() self mount, different order",
-  async () => {
-    const innerApp = new App<{ text: string }>()
-      .use(function B(ctx) {
-        ctx.state.text += "B";
-        return ctx.next();
-      })
-      .get("/foo", (ctx) => new Response(ctx.state.text))
-      .post("/foo", (ctx) => new Response(ctx.state.text));
+test("App - .mountApp() self mount, different order", async () => {
+  const innerApp = new App<{ text: string }>()
+    .use(function B(ctx) {
+      ctx.state.text += "B";
+      return ctx.next();
+    })
+    .get("/foo", (ctx) => new Response(ctx.state.text))
+    .post("/foo", (ctx) => new Response(ctx.state.text));
 
-    const app = new App<{ text: string }>()
-      .use(function A(ctx) {
-        ctx.state.text = "A";
-        return ctx.next();
-      })
-      .get("/", () => new Response("ok"))
-      .mountApp("/", innerApp);
+  const app = new App<{ text: string }>()
+    .use(function A(ctx) {
+      ctx.state.text = "A";
+      return ctx.next();
+    })
+    .get("/", () => new Response("ok"))
+    .mountApp("/", innerApp);
 
-    const server = new FakeServer(app.handler());
+  const server = new FakeServer(app.handler());
 
-    let res = await server.get("/");
-    expect(await res.text()).toEqual("ok");
+  let res = await server.get("/");
+  expect(await res.text()).toEqual("ok");
 
-    res = await server.get("/foo");
-    expect(await res.text()).toEqual("AB");
+  res = await server.get("/foo");
+  expect(await res.text()).toEqual("AB");
 
-    res = await server.post("/foo");
-    expect(await res.text()).toEqual("AB");
-  },
-);
+  res = await server.post("/foo");
+  expect(await res.text()).toEqual("AB");
+});
 
-Deno.test("App - .mountApp() self mount empty", async () => {
+test("App - .mountApp() self mount empty", async () => {
   const innerApp = new App<{ text: string }>()
     .use((ctx) => {
       ctx.state.text = "A";
@@ -414,52 +409,46 @@ Deno.test("App - .mountApp() self mount empty", async () => {
   expect(await res.text()).toEqual("A");
 });
 
-Deno.test(
-  "App - .mountApp() self mount with middleware",
-  async () => {
-    const innerApp = new App<{ text: string }>()
-      .use(function Inner(ctx) {
-        ctx.state.text += "_Inner";
-        return ctx.next();
-      })
-      .get("/", (ctx) => new Response(ctx.state.text));
+test("App - .mountApp() self mount with middleware", async () => {
+  const innerApp = new App<{ text: string }>()
+    .use(function Inner(ctx) {
+      ctx.state.text += "_Inner";
+      return ctx.next();
+    })
+    .get("/", (ctx) => new Response(ctx.state.text));
 
-    const app = new App<{ text: string }>()
-      .use(function Outer(ctx) {
-        ctx.state.text = "Outer";
-        return ctx.next();
-      })
-      .mountApp("/", innerApp);
+  const app = new App<{ text: string }>()
+    .use(function Outer(ctx) {
+      ctx.state.text = "Outer";
+      return ctx.next();
+    })
+    .mountApp("/", innerApp);
 
-    const server = new FakeServer(app.handler());
+  const server = new FakeServer(app.handler());
 
-    const res = await server.get("/");
-    expect(await res.text()).toEqual("Outer_Inner");
-  },
-);
+  const res = await server.get("/");
+  expect(await res.text()).toEqual("Outer_Inner");
+});
 
 // https://github.com/denoland/fresh/issues/3033
-Deno.test(
-  "App - .mountApp() self mount with dynamic routes",
-  async () => {
-    const innerApp = new App<{ text: string }>()
-      .get("/", () => new Response("list authors"))
-      .get("/:name", (ctx) => new Response(`show: ${ctx.params.name}`));
+test("App - .mountApp() self mount with dynamic routes", async () => {
+  const innerApp = new App<{ text: string }>()
+    .get("/", () => new Response("list authors"))
+    .get("/:name", (ctx) => new Response(`show: ${ctx.params.name}`));
 
-    const app = new App<{ text: string }>()
-      .mountApp("/api/authors", innerApp);
+  const app = new App<{ text: string }>()
+    .mountApp("/api/authors", innerApp);
 
-    const server = new FakeServer(app.handler());
+  const server = new FakeServer(app.handler());
 
-    let res = await server.get("/api/authors");
-    expect(await res.text()).toEqual("list authors");
+  let res = await server.get("/api/authors");
+  expect(await res.text()).toEqual("list authors");
 
-    res = await server.get("/api/authors/foo");
-    expect(await res.text()).toEqual("show: foo");
-  },
-);
+  res = await server.get("/api/authors/foo");
+  expect(await res.text()).toEqual("show: foo");
+});
 
-Deno.test("App - .mountApp() fallback route", async () => {
+test("App - .mountApp() fallback route", async () => {
   let called = "";
   const innerApp = new App<{ text: string }>()
     .use(function Inner(ctx) {
@@ -482,7 +471,7 @@ Deno.test("App - .mountApp() fallback route", async () => {
   expect(called).toEqual("Outer_Inner");
 });
 
-Deno.test("App - catches errors", async () => {
+test("App - catches errors", async () => {
   let thrownErr: unknown | null = null;
   const app = new App<{ text: string }>()
     .use(async (ctx) => {
@@ -505,7 +494,7 @@ Deno.test("App - catches errors", async () => {
   expect(thrownErr).toBeInstanceOf(Error);
 });
 
-Deno.test("App - sets error on context", async () => {
+test("App - sets error on context", async () => {
   const thrown: [unknown, unknown][] = [];
   const app = new App()
     .use(async (ctx) => {
@@ -537,7 +526,7 @@ Deno.test("App - sets error on context", async () => {
   expect(thrown[1][0]).toEqual(thrown[1][1]);
 });
 
-Deno.test("App - support setting request init in ctx.render()", async () => {
+test("App - support setting request init in ctx.render()", async () => {
   const app = new App<{ text: string }>()
     .get("/", (ctx) => {
       return ctx.render(<div>ok</div>, {
@@ -553,7 +542,7 @@ Deno.test("App - support setting request init in ctx.render()", async () => {
   expect(res.headers.get("X-Foo")).toEqual("foo");
 });
 
-Deno.test("App - throw when middleware returns no response", async () => {
+test("App - throw when middleware returns no response", async () => {
   const app = new App<{ text: string }>()
     .get(
       "/",
@@ -568,7 +557,7 @@ Deno.test("App - throw when middleware returns no response", async () => {
   expect(text).toContain("Internal server error");
 });
 
-Deno.test("App - overwrite default 404 handler", async () => {
+test("App - overwrite default 404 handler", async () => {
   const app = new App()
     .notFound(() => new Response("bar", { status: 404 }))
     .get("/foo", () => new Response("foo"))
@@ -585,7 +574,7 @@ Deno.test("App - overwrite default 404 handler", async () => {
   expect(await res.text()).toEqual("bar");
 });
 
-Deno.test("App - uses error route", async () => {
+test("App - uses error route", async () => {
   const app = new App()
     .onError("*", () => new Response("error route", { status: 200 }))
     .get("/thrower", () => {
@@ -601,7 +590,7 @@ Deno.test("App - uses error route", async () => {
   expect(await res.text()).toEqual("error route");
 });
 
-Deno.test("App - uses notFound route on 404", async () => {
+test("App - uses notFound route on 404", async () => {
   const app = new App()
     .notFound(() => new Response("not found route", { status: 404 }))
     .onError("*", () => new Response("error route", { status: 500 }))
@@ -625,7 +614,7 @@ Deno.test("App - uses notFound route on 404", async () => {
 });
 
 // Issue: https://github.com/denoland/fresh/issues/3115
-Deno.test("App - .route() with basePath", async () => {
+test("App - .route() with basePath", async () => {
   const app = new App({ basePath: "/foo/bar" })
     .route("/", { handler: () => new Response("ok") });
 
@@ -644,7 +633,7 @@ Deno.test("App - .route() with basePath", async () => {
   expect(res.status).toEqual(200);
 });
 
-Deno.test("App - .all() with *", async () => {
+test("App - .all() with *", async () => {
   const app = new App()
     .all("*", () => new Response("ok"));
 
@@ -654,7 +643,7 @@ Deno.test("App - .all() with *", async () => {
   expect(await res.text()).toEqual("ok");
 });
 
-Deno.test("App - .route() with *", async () => {
+test("App - .route() with *", async () => {
   const app = new App()
     .route("*", { handler: () => new Response("ok") });
 
@@ -664,7 +653,7 @@ Deno.test("App - .route() with *", async () => {
   expect(await res.text()).toEqual("ok");
 });
 
-Deno.test("App - .route() handler returns headers", async () => {
+test("App - .route() handler returns headers", async () => {
   const app = new App()
     .route("/", {
       handler: () => {
@@ -708,7 +697,7 @@ Deno.test("App - .route() handler returns headers", async () => {
   expect(res.headers.get("X-Foo")).toEqual("foo");
 });
 
-Deno.test("App - .use() - lazy", async () => {
+test("App - .use() - lazy", async () => {
   const app = new App<{ text: string }>()
     // deno-lint-ignore require-await
     .use(async () => {
@@ -725,7 +714,7 @@ Deno.test("App - .use() - lazy", async () => {
   expect(await res.text()).toEqual("ok");
 });
 
-Deno.test("App - .route() - lazy", async () => {
+test("App - .route() - lazy", async () => {
   const app = new App()
     // deno-lint-ignore require-await
     .route("/", async () => {
@@ -738,7 +727,7 @@ Deno.test("App - .route() - lazy", async () => {
   expect(await res.text()).toEqual("ok");
 });
 
-Deno.test("App - .get/post/patch/put/delete/head/all() - lazy", async () => {
+test("App - .get/post/patch/put/delete/head/all() - lazy", async () => {
   const app = new App()
     .get("/", () => Promise.resolve(() => new Response("ok")))
     .post("/", () => Promise.resolve(() => new Response("ok")))
@@ -775,7 +764,7 @@ Deno.test("App - .get/post/patch/put/delete/head/all() - lazy", async () => {
   expect(res.body).toEqual(null);
 });
 
-Deno.test("App prefer .head over .get", async () => {
+test("App prefer .head over .get", async () => {
   const app = new App()
     .get(
       "/",
@@ -799,7 +788,7 @@ Deno.test("App prefer .head over .get", async () => {
   expect(res.status).toEqual(200);
 });
 
-Deno.test("App support HEAD if only GET is registered", async () => {
+test("App support HEAD if only GET is registered", async () => {
   const app = new App()
     .get("/", () => Promise.resolve(() => new Response("ok")))
     .get("/:id", () => Promise.resolve(() => new Response("ok")));
@@ -815,28 +804,25 @@ Deno.test("App support HEAD if only GET is registered", async () => {
   expect(res.status).toEqual(200);
 });
 
-Deno.test(
-  "App support HEAD in .route() when only GET is registered",
-  async () => {
-    const app = new App()
-      .route("/", {
-        handler: {
-          GET() {
-            return { data: {} };
-          },
+test("App support HEAD in .route() when only GET is registered", async () => {
+  const app = new App()
+    .route("/", {
+      handler: {
+        GET() {
+          return { data: {} };
         },
-        component: () => <h1>foo</h1>,
-      });
+      },
+      component: () => <h1>foo</h1>,
+    });
 
-    const server = new FakeServer(app.handler());
+  const server = new FakeServer(app.handler());
 
-    const res = await server.head("/");
-    expect(res.body).toEqual(null);
-    expect(res.status).toEqual(200);
-  },
-);
+  const res = await server.head("/");
+  expect(res.body).toEqual(null);
+  expect(res.status).toEqual(200);
+});
 
-Deno.test("App - .appWrapper()", async () => {
+test("App - .appWrapper()", async () => {
   const app = new App()
     .appWrapper(({ Component }) => (
       <>
@@ -851,7 +837,7 @@ Deno.test("App - .appWrapper()", async () => {
   expect(await res.text()).toContain("<body>app/index<");
 });
 
-Deno.test("App - .layout()", async () => {
+test("App - .layout()", async () => {
   const app = new App()
     .layout("/", ({ Component }) => (
       <>
@@ -871,7 +857,7 @@ Deno.test("App - .layout()", async () => {
   expect(await res.text()).toContain("<body>layout/foo/index<");
 });
 
-Deno.test("App - .appWrapper() + .layout()", async () => {
+test("App - .appWrapper() + .layout()", async () => {
   const app = new App()
     .appWrapper(({ Component }) => (
       <>
@@ -891,7 +877,7 @@ Deno.test("App - .appWrapper() + .layout()", async () => {
   expect(await res.text()).toContain("<body>app/layout/index<");
 });
 
-Deno.test("App - ctx.render() without app wrapper or layout", async () => {
+test("App - ctx.render() without app wrapper or layout", async () => {
   const app = new App()
     .appWrapper(({ Component }) => (
       <>
@@ -915,7 +901,7 @@ Deno.test("App - ctx.render() without app wrapper or layout", async () => {
   expect(await res.text()).toContain("<body>index<");
 });
 
-Deno.test("App - .mountApp() with basePath", async () => {
+test("App - .mountApp() with basePath", async () => {
   const innerApp = new App({ basePath: "/api" })
     .get("/users", () => new Response("users"));
 
@@ -937,7 +923,7 @@ Deno.test("App - .mountApp() with basePath", async () => {
   expect(res.status).toEqual(404);
 });
 
-Deno.test("App - .mountApp() with main app basePath", async () => {
+test("App - .mountApp() with main app basePath", async () => {
   const innerApp = new App()
     .get("/data", () => new Response("data"));
 
@@ -958,7 +944,7 @@ Deno.test("App - .mountApp() with main app basePath", async () => {
   expect(res.status).toEqual(404);
 });
 
-Deno.test("App - .mountApp() with both main and inner basePath", async () => {
+test("App - .mountApp() with both main and inner basePath", async () => {
   const innerApp = new App({ basePath: "/api/v2" })
     .get("/users", () => new Response("users"))
     .get("/posts", () => new Response("posts"));

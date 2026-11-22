@@ -1,4 +1,5 @@
-import { denoPlugin } from "@deno/esbuild-plugin";
+import * as fsp from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 import type { BuildOptions, Plugin as EsbuildPlugin } from "esbuild";
 import * as path from "@std/path";
 
@@ -7,7 +8,8 @@ export interface FreshBundleOptions {
   cwd: string;
   buildId: string;
   outDir: string;
-  denoJsonPath: string;
+  /** Path to the tsconfig.json that configures JSX */
+  configPath?: string;
   entryPoints: Record<string, string>;
   target: string | string[];
   jsxImportSource?: string;
@@ -29,7 +31,25 @@ export interface BuildOutput {
 
 let esbuild: null | typeof import("esbuild") = null;
 
-const PREACT_ENV = Deno.env.get("PREACT_PATH");
+const PREACT_ENV = process.env.PREACT_PATH;
+
+const PUBLIC_ENV_PREFIX = "FRESH_PUBLIC_";
+
+/**
+ * Inline public environment variables into client code, like the
+ * `publicEnvVarPrefix` option of the former Deno esbuild plugin.
+ */
+function publicEnvDefines(): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(process.env)) {
+    if (!key.startsWith(PUBLIC_ENV_PREFIX) || value === undefined) continue;
+    const json = JSON.stringify(value);
+    out[`process.env.${key}`] = json;
+    out[`Bun.env.${key}`] = json;
+    out[`import.meta.env.${key}`] = json;
+  }
+  return out;
+}
 
 export async function bundleJs(
   options: FreshBundleOptions,
@@ -38,13 +58,7 @@ export async function bundleJs(
     await startEsbuild();
   }
 
-  try {
-    await Deno.mkdir(options.cwd, { recursive: true });
-  } catch (err) {
-    if (!(err instanceof Deno.errors.AlreadyExists)) {
-      throw err;
-    }
-  }
+  await fsp.mkdir(options.cwd, { recursive: true });
 
   const bundle = await esbuild!.build({
     entryPoints: options.entryPoints,
@@ -74,7 +88,9 @@ export async function bundleJs(
     write: false,
     metafile: true,
 
+    tsconfig: options.configPath,
     define: {
+      ...publicEnvDefines(),
       "process.env.NODE_ENV": JSON.stringify(
         options.dev ? "development" : "production",
       ),
@@ -84,11 +100,7 @@ export async function bundleJs(
       preactDebugger(PREACT_ENV),
       buildIdPlugin(options.buildId),
       windowsPathFixer(),
-      denoPlugin({
-        preserveJsx: true,
-        debug: false,
-        publicEnvVarPrefix: "FRESH_PUBLIC_",
-      }),
+      specifierPlugin(),
     ],
   });
 
@@ -153,17 +165,8 @@ export async function bundleJs(
   };
 }
 
-let initialized = false;
-
 export async function startEsbuild() {
-  esbuild = Deno.env.get("FRESH_ESBUILD_LOADER") === "portable"
-    ? await import("esbuild-wasm")
-    : await import("esbuild");
-
-  if (!initialized) {
-    await esbuild.initialize({});
-    initialized = true;
-  }
+  esbuild = await import("esbuild");
 }
 
 function buildIdPlugin(buildId: string): EsbuildPlugin {
@@ -225,7 +228,7 @@ function windowsPathFixer(): EsbuildPlugin {
   return {
     name: "fresh-fix-windows",
     setup(build) {
-      if (Deno.build.os === "windows") {
+      if (process.platform === "win32") {
         build.onResolve({ filter: /\.*/ }, (args) => {
           if (args.path.startsWith("\\")) {
             const normalized = path.resolve(args.path);
@@ -237,4 +240,47 @@ function windowsPathFixer(): EsbuildPlugin {
       }
     },
   };
+}
+
+/**
+ * Normalize specifiers that esbuild can't resolve on its own:
+ *
+ * - `file://` URLs are turned into paths
+ * - `npm:foo@1.2.3/bar` and `jsr:@foo/bar@1/baz` prefixes are stripped so
+ *   that the package is resolved from `node_modules`.
+ */
+function specifierPlugin(): EsbuildPlugin {
+  return {
+    name: "fresh-specifiers",
+    setup(build) {
+      build.onResolve({ filter: /^(file|npm|jsr):/ }, async (args) => {
+        if (args.path.startsWith("file:")) {
+          return { path: fileURLToPath(args.path) };
+        }
+
+        const bare = stripRegistryPrefix(args.path);
+        const result = await build.resolve(bare, {
+          kind: args.kind,
+          resolveDir: args.resolveDir || build.initialOptions.absWorkingDir,
+          importer: args.importer,
+        });
+        if (result.errors.length > 0) {
+          return { errors: result.errors };
+        }
+        return { path: result.path, external: result.external };
+      });
+    },
+  };
+}
+
+/**
+ * Turn `npm:preact@^10/hooks` into `preact/hooks` and
+ * `jsr:@std/path@1/posix` into `@std/path/posix`.
+ */
+export function stripRegistryPrefix(spec: string): string {
+  const match = spec.match(
+    /^(?:npm|jsr):\/?((?:@[^/@]+\/)?[^/@]+)(?:@[^/]*)?(\/.*)?$/,
+  );
+  if (match === null) return spec;
+  return match[1] + (match[2] ?? "");
 }

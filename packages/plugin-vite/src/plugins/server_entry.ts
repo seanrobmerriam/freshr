@@ -1,3 +1,4 @@
+import * as fsp from "node:fs/promises";
 import type { Manifest, Plugin } from "vite";
 import {
   generateServerEntry,
@@ -157,7 +158,7 @@ if (import.meta.hot) import.meta.hot.accept();`;
         const prepared = await prepareStaticFile(file, serverOutDir);
         const rel = path.relative(serverOutDir, file.filePath);
         const target = path.join(clientOutDir, rel);
-        await Deno.rename(file.filePath, target);
+        await fsp.rename(file.filePath, target);
 
         prepared.filePath = path.join("client", prepared.filePath);
 
@@ -165,7 +166,7 @@ if (import.meta.hot) import.meta.hot.accept();`;
       }));
 
       const outDir = path.dirname(serverOutDir);
-      await Deno.writeTextFile(
+      await fsp.writeFile(
         path.join(outDir, "server.js"),
         `import server, { registerStaticFile } from "./server/${
           serverEntryFilename || "server-entry.mjs"
@@ -174,7 +175,10 @@ if (import.meta.hot) import.meta.hot.accept();`;
 ${registered.join("\n")}
 
 export default {
-  fetch: server.fetch
+  port: server.port,
+  development: false,
+  fetch: server.fetch,
+  websocket: server.websocket,
 };
 `,
       );

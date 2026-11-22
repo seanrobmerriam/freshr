@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 import { expect } from "@std/expect";
 import type { FsAdapter } from "../fs.ts";
 import { FileTransformer, type ProcessedFile } from "./file_transformer.ts";
@@ -54,7 +55,7 @@ function consumeResult(result: ProcessedFile[]) {
   return out.sort((a, b) => a.path.localeCompare(b.path));
 }
 
-Deno.test("FileTransformer - transform sync", async () => {
+test("FileTransformer - transform sync", async () => {
   const transformer = testTransformer({
     "foo.txt": "foo",
   });
@@ -72,7 +73,7 @@ Deno.test("FileTransformer - transform sync", async () => {
   ]);
 });
 
-Deno.test("FileTransformer - transform async", async () => {
+test("FileTransformer - transform async", async () => {
   const transformer = testTransformer({
     "foo.txt": "foo",
   });
@@ -91,7 +92,7 @@ Deno.test("FileTransformer - transform async", async () => {
   ]);
 });
 
-Deno.test("FileTransformer - transform return Uint8Array", async () => {
+test("FileTransformer - transform return Uint8Array", async () => {
   const transformer = testTransformer({
     "foo.txt": "foo",
   });
@@ -109,7 +110,7 @@ Deno.test("FileTransformer - transform return Uint8Array", async () => {
   ]);
 });
 
-Deno.test("FileTransformer - pass transformed content", async () => {
+test("FileTransformer - pass transformed content", async () => {
   const transformer = testTransformer({
     "input.txt": "input",
   });
@@ -137,39 +138,36 @@ Deno.test("FileTransformer - pass transformed content", async () => {
   ]);
 });
 
-Deno.test(
-  "FileTransformer - pass transformed content with multiple",
-  async () => {
-    const transformer = testTransformer({
-      "input.txt": "input",
-    });
+test("FileTransformer - pass transformed content with multiple", async () => {
+  const transformer = testTransformer({
+    "input.txt": "input",
+  });
 
-    transformer.onTransform({ pluginName: "A", filter: /.*/ }, (args) => {
-      return [{
-        path: args.path,
-        content: args.text + " -> A",
-      }];
-    });
-    transformer.onTransform({ pluginName: "B", filter: /.*/ }, (args) => {
-      return {
-        content: args.text + " -> B",
-      };
-    });
+  transformer.onTransform({ pluginName: "A", filter: /.*/ }, (args) => {
+    return [{
+      path: args.path,
+      content: args.text + " -> A",
+    }];
+  });
+  transformer.onTransform({ pluginName: "B", filter: /.*/ }, (args) => {
+    return {
+      content: args.text + " -> B",
+    };
+  });
 
-    const result = await transformer.process("input.txt", "development", "");
-    const files = await consumeResult(result!);
-    expect(files).toEqual([
-      {
-        content: "input -> A -> B",
-        map: null,
-        path: "input.txt",
-        inputFiles: ["input.txt"],
-      },
-    ]);
-  },
-);
+  const result = await transformer.process("input.txt", "development", "");
+  const files = await consumeResult(result!);
+  expect(files).toEqual([
+    {
+      content: "input -> A -> B",
+      map: null,
+      path: "input.txt",
+      inputFiles: ["input.txt"],
+    },
+  ]);
+});
 
-Deno.test("FileTransformer - return multiple results", async () => {
+test("FileTransformer - return multiple results", async () => {
   const transformer = testTransformer({
     "foo.txt": "foo",
   });
@@ -197,42 +195,39 @@ Deno.test("FileTransformer - return multiple results", async () => {
   expect(received).toEqual(["foo.txt", "b.txt", "a.txt"]);
 });
 
-Deno.test(
-  "FileTransformer - track input files through temporary results",
-  async () => {
-    const transformer = testTransformer({
-      "foo.txt": "foo",
-    });
+test("FileTransformer - track input files through temporary results", async () => {
+  const transformer = testTransformer({
+    "foo.txt": "foo",
+  });
 
-    transformer.onTransform({ pluginName: "A", filter: /foo\.txt$/ }, () => {
-      return [{
-        path: "a.txt",
-        content: "A",
-      }, {
-        path: "b.txt",
-        content: "B",
-      }];
-    });
-    transformer.onTransform(
-      { pluginName: "B", filter: /[ab]\.txt$/ },
-      (args) => {
-        return {
-          path: "c" + args.path,
-          content: args.text + "C",
-        };
-      },
-    );
+  transformer.onTransform({ pluginName: "A", filter: /foo\.txt$/ }, () => {
+    return [{
+      path: "a.txt",
+      content: "A",
+    }, {
+      path: "b.txt",
+      content: "B",
+    }];
+  });
+  transformer.onTransform(
+    { pluginName: "B", filter: /[ab]\.txt$/ },
+    (args) => {
+      return {
+        path: "c" + args.path,
+        content: args.text + "C",
+      };
+    },
+  );
 
-    const result = await transformer.process("foo.txt", "development", "");
-    const files = await consumeResult(result!);
-    expect(files).toEqual([
-      { content: "AC", map: null, path: "ca.txt", inputFiles: ["foo.txt"] },
-      { content: "BC", map: null, path: "cb.txt", inputFiles: ["foo.txt"] },
-    ]);
-  },
-);
+  const result = await transformer.process("foo.txt", "development", "");
+  const files = await consumeResult(result!);
+  expect(files).toEqual([
+    { content: "AC", map: null, path: "ca.txt", inputFiles: ["foo.txt"] },
+    { content: "BC", map: null, path: "cb.txt", inputFiles: ["foo.txt"] },
+  ]);
+});
 
-Deno.test("FileTransformer - pass root to args", async () => {
+test("FileTransformer - pass root to args", async () => {
   const transformer = testTransformer({ "foo.txt": "foo" }, "/<root>/");
 
   let root = "";

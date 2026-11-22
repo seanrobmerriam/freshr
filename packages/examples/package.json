@@ -1,0 +1,16 @@
+{
+  "name": "@fresh/examples",
+  "version": "1.0.1",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    "./island": "./src/island.tsx",
+    "./app1": "./src/app1.tsx",
+    "./app2": "./src/app2.tsx"
+  },
+  "dependencies": {
+    "@preact/signals": "^2.2.1",
+    "fresh": "workspace:packages/fresh",
+    "preact": "^10.27.0"
+  }
+}

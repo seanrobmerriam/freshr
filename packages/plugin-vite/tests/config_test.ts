@@ -1,8 +1,9 @@
+import { test } from "bun:test";
 import { expect } from "@std/expect";
 import { fresh } from "../src/mod.ts";
 import type { Plugin } from "vite";
 
-Deno.test("fresh plugin - sets server.watch.ignored patterns", () => {
+test("fresh plugin - sets server.watch.ignored patterns", () => {
   const plugins = fresh() as Plugin[];
   const freshPlugin = plugins.find((p) => p.name === "fresh");
   expect(freshPlugin).toBeDefined();

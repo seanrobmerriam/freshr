@@ -1,4 +1,5 @@
-import { launch } from "@astral/astral";
+import * as fsp from "node:fs/promises";
+import { chromium } from "playwright";
 import { Image } from "imagescript";
 
 export function validateArgs(args: string[]): [string, string] {
@@ -29,18 +30,20 @@ export async function captureScreenshot(
   url: string,
   id: string,
 ): Promise<void> {
-  const browser = await launch();
+  const browser = await chromium.launch();
   try {
-    const page = await browser.newPage(url);
-    await page.waitForNetworkIdle();
-    const raw = await page.screenshot();
+    const page = await browser.newPage({
+      viewport: { width: 1280, height: 720 },
+    });
+    await page.goto(url, { waitUntil: "networkidle" });
+    const raw = new Uint8Array(await page.screenshot());
 
     const image2x = await Image.decode(raw);
     const { image2x: path2x, image1x: path1x } = generateFilePaths(id);
 
-    await Deno.writeFile(path2x, await image2x.encodeJPEG(80));
+    await fsp.writeFile(path2x, await image2x.encodeJPEG(80));
     const image1x = image2x.resize(image2x.width / 2, Image.RESIZE_AUTO);
-    await Deno.writeFile(path1x, await image1x.encodeJPEG(80));
+    await fsp.writeFile(path1x, await image1x.encodeJPEG(80));
   } finally {
     await browser.close();
   }
@@ -48,7 +51,7 @@ export async function captureScreenshot(
 
 // only run the script if it's the main module
 if (import.meta.main) {
-  const [url, id] = validateArgs(Deno.args);
+  const [url, id] = validateArgs(process.argv.slice(2));
   validateUrl(url);
   await captureScreenshot(url, id);
   // deno-lint-ignore no-console

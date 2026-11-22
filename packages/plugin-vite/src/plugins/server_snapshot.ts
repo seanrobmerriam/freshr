@@ -1,3 +1,4 @@
+import * as fsp from "node:fs/promises";
 import type {
   EnvironmentModuleNode,
   Manifest,
@@ -213,8 +214,9 @@ export function serverSnapshot(options: ResolvedFreshViteConfig): Plugin[] {
           } else {
             buildId = await getBuildId(false);
             const manifest = JSON.parse(
-              await Deno.readTextFile(
+              await fsp.readFile(
                 path.join(clientOutDir, ".vite", "manifest.json"),
+                "utf-8",
               ),
             ) as Manifest;
             const resolvedIslandSpecs = new Map<string, string>();
@@ -321,15 +323,15 @@ export function serverSnapshot(options: ResolvedFreshViteConfig): Plugin[] {
                 const filePath = path.join(clientOutDir, relative);
 
                 try {
-                  await Deno.mkdir(path.dirname(filePath), {
+                  await fsp.mkdir(path.dirname(filePath), {
                     recursive: true,
                   });
                 } catch (err) {
-                  if (!(err instanceof Deno.errors.AlreadyExists)) {
+                  if (!((err as NodeJS.ErrnoException)?.code === "EEXIST")) {
                     throw err;
                   }
                 }
-                await Deno.copyFile(entry.path, filePath);
+                await fsp.copyFile(entry.path, filePath);
 
                 staticFiles.push({
                   filePath,
@@ -550,13 +552,13 @@ export default ${JSON.stringify(route.css)}
             if (!/\.(?:c|m)?js$/.test(info.file)) continue;
 
             const filePath = path.join(serverOutDir, info.file);
-            const content = await Deno.readTextFile(filePath);
+            const content = await fsp.readFile(filePath, "utf-8");
             if (!content.includes(FRESH_CSS_PLACEHOLDER)) continue;
 
             // Replace all placeholders in the file with the CSS
             const replaced = replaceFreshCssPlaceholders(content, info.css);
 
-            await Deno.writeTextFile(filePath, replaced);
+            await fsp.writeFile(filePath, replaced);
           }
         }
       },

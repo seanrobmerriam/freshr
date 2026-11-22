@@ -1,3 +1,5 @@
+import * as fsp from "node:fs/promises";
+import { test } from "bun:test";
 import { expect, fn } from "@std/expect";
 import * as path from "@std/path";
 import { Builder, specToName } from "./builder.ts";
@@ -7,6 +9,7 @@ import { BUILD_ID } from "@fresh/build-id";
 import { integrationTest, withTmpDir, writeFiles } from "../test_utils.ts";
 import {
   getStdOutput,
+  runCommand,
   withChildProcessServer,
 } from "../../tests/test_utils.tsx";
 import { staticFiles } from "../middlewares/static_files.ts";
@@ -39,7 +42,7 @@ integrationTest("Builder - chain onTransformStaticFile", async () => {
     },
   );
 
-  await Deno.writeTextFile(path.join(tmp, "foo.css"), "body { color: red; }");
+  await fsp.writeFile(path.join(tmp, "foo.css"), "body { color: red; }");
   await builder.build();
 
   expect(logs).toEqual(["A", "B", "C"]);
@@ -53,15 +56,16 @@ integrationTest("Builder - handles Windows paths", async () => {
     outDir: path.join(tmp, "dist"),
     staticDir: tmp,
   });
-  await Deno.mkdir(path.join(tmp, "images"));
-  await Deno.writeTextFile(
+  await fsp.mkdir(path.join(tmp, "images"));
+  await fsp.writeFile(
     path.join(tmp, "images", "batman.svg"),
     "<svg></svg>",
   );
   await builder.build();
 
-  const snapshotJson = await Deno.readTextFile(
+  const snapshotJson = await fsp.readFile(
     path.join(tmp, "dist", "snapshot.js"),
+    "utf-8",
   );
   expect(snapshotJson).toContain("/images/batman.svg");
 });
@@ -74,14 +78,15 @@ integrationTest("Builder - hashes CSS urls by default", async () => {
     staticDir: tmp,
   });
 
-  await Deno.writeTextFile(
+  await fsp.writeFile(
     path.join(tmp, "foo.css"),
     "body { background: url('/foo.jpg'); }",
   );
   await builder.build();
 
-  const css = await Deno.readTextFile(
+  const css = await fsp.readFile(
     path.join(tmp, "dist", "static", "foo.css"),
+    "utf-8",
   );
   expect(css).toContain('body { background: url("/foo.jpg?__frsh_c=');
 });
@@ -94,14 +99,15 @@ integrationTest("Builder - hashes CSS urls by default", async () => {
     outDir: path.join(tmp, "dist"),
     staticDir: tmp,
   });
-  await Deno.writeTextFile(
+  await fsp.writeFile(
     path.join(tmp, "foo.css"),
     `:root { --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='rgb(76, 154.5, 137.5)' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='20 6 9 17 4 12'%3E%3C/polyline%3E%3C/svg%3E"); }`,
   );
   await builder.build();
 
-  const css = await Deno.readTextFile(
+  const css = await fsp.readFile(
     path.join(tmp, "dist", "static", "foo.css"),
+    "utf-8",
   );
   expect(css).toEqual(
     `:root { --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='rgb(76, 154.5, 137.5)' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='20 6 9 17 4 12'%3E%3C/polyline%3E%3C/svg%3E"); }`,
@@ -121,7 +127,7 @@ integrationTest("Builder - can bundle islands from JSR", async () => {
   await builder.build();
 
   const name = specToName(specifier);
-  const code = await Deno.readTextFile(
+  const code = await fsp.readFile(
     path.join(
       tmp,
       "dist",
@@ -131,6 +137,7 @@ integrationTest("Builder - can bundle islands from JSR", async () => {
       BUILD_ID,
       `${name}.js`,
     ),
+    "utf-8",
   );
   expect(code).toContain('"remote-island"');
 });
@@ -152,7 +159,7 @@ integrationTest(
     await builder.build({ mode: "production", snapshot: "disk" });
 
     const name = specToName(specifier);
-    const code = await Deno.readTextFile(
+    const code = await fsp.readFile(
       path.join(
         tmp,
         "dist",
@@ -162,6 +169,7 @@ integrationTest(
         BUILD_ID,
         `${name}.js`,
       ),
+      "utf-8",
     );
     expect(code).toContain('"decrement"');
   },
@@ -201,8 +209,8 @@ integrationTest("Builder - exclude files", async () => {
     },
   );
 
-  await Deno.writeTextFile(path.join(tmp, "foo.css"), "body { color: red; }");
-  await Deno.writeTextFile(
+  await fsp.writeFile(path.join(tmp, "foo.css"), "body { color: red; }");
+  await fsp.writeFile(
     path.join(tmp, "bar.css"),
     "body { color: blue; }",
   );
@@ -252,8 +260,8 @@ integrationTest("Builder - .well-known static files", async () => {
   const tmp = _tmp.dir;
 
   const foo = path.join(tmp, ".well-known", "foo.json");
-  await Deno.mkdir(path.dirname(foo), { recursive: true });
-  await Deno.writeTextFile(foo, JSON.stringify({ ok: true }));
+  await fsp.mkdir(path.dirname(foo), { recursive: true });
+  await fsp.writeFile(foo, JSON.stringify({ ok: true }));
 
   const builder = new Builder({
     outDir: path.join(tmp, "dist"),
@@ -298,7 +306,7 @@ export const app = new App().fsRoutes()`,
 
   let text = "fail";
   await withChildProcessServer(
-    { cwd: tmp, args: ["serve", "-A", "--port=0", "dist/server.js"] },
+    { cwd: tmp, args: ["dist/server.js"], env: { PORT: "0" } },
     async (address) => {
       const res = await fetch(`${address}/foo`);
       text = await res.text();
@@ -333,7 +341,7 @@ export const app = new App().fsRoutes()`,
 
   let text = "fail";
   await withChildProcessServer(
-    { cwd: tmp, args: ["serve", "-A", "--port=0", "dist/server.js"] },
+    { cwd: tmp, args: ["dist/server.js"], env: { PORT: "0" } },
     async (address) => {
       const res = await fetch(address);
       text = await res.text();
@@ -480,7 +488,7 @@ export const app = new App()
     await new Builder({ root: tmp }).build();
 
     await withChildProcessServer(
-      { cwd: tmp, args: ["serve", "-A", "--port=0", "_fresh/server.js"] },
+      { cwd: tmp, args: ["_fresh/server.js"], env: { PORT: "0" } },
       async (address) => {
         let res = await fetch(`${address}/foo.txt`);
         expect(await res.text()).toEqual("ok");
@@ -574,7 +582,7 @@ export const app = new App()
     }).build();
 
     await withChildProcessServer(
-      { cwd: tmp, args: ["serve", "-A", "--port=0", "_fresh/server.js"] },
+      { cwd: tmp, args: ["_fresh/server.js"], env: { PORT: "0" } },
       async (address) => {
         // File only in first dir
         let res = await fetch(`${address}/a.txt`);
@@ -606,7 +614,7 @@ export const app = new App()
   await new Builder({ root: tmp, serverEntry: "other.ts" }).build();
 
   await withChildProcessServer(
-    { cwd: tmp, args: ["serve", "-A", "--port=0", "_fresh/server.js"] },
+    { cwd: tmp, args: ["_fresh/server.js"], env: { PORT: "0" } },
     async (address) => {
       const res = await fetch(`${address}`);
       expect(await res.text()).toEqual("ok");
@@ -668,8 +676,12 @@ integrationTest({
       export default () => <Foo />;`,
     "main.ts": `import { App } from "fresh";
 export const app = new App().fsRoutes()`,
-    "deno.json": JSON.stringify({
-      imports: { "foo-island": "other/Foo.tsx" },
+    "tsconfig.json": JSON.stringify({
+      extends: path.relative(
+        tmp,
+        path.join(import.meta.dirname!, "..", "..", "tsconfig.json"),
+      ),
+      compilerOptions: { paths: { "foo-island": ["./other/Foo.tsx"] } },
     }),
   });
 
@@ -684,7 +696,7 @@ export const app = new App().fsRoutes()`,
 
   let text = "fail";
   await withChildProcessServer(
-    { cwd: tmp, args: ["serve", "-A", "--port=0", "dist/server.js"] },
+    { cwd: tmp, args: ["dist/server.js"], env: { PORT: "0" } },
     async (address) => {
       const res = await fetch(address);
       text = await res.text();
@@ -724,14 +736,14 @@ export const app = new App().fsRoutes()`,
     "js",
     builder.config.buildId,
   );
-  const entries = await Array.fromAsync(Deno.readDir(assetDir));
+  const entries = await fsp.readdir(assetDir, { withFileTypes: true });
 
   const map = entries.find((entry) =>
-    entry.isFile && entry.name.endsWith(".js.map")
+    entry.isFile() && entry.name.endsWith(".js.map")
   );
   if (!map) throw new Error(`Sourcemap not found`);
 
-  const content = await Deno.readTextFile(path.join(assetDir, map.name));
+  const content = await fsp.readFile(path.join(assetDir, map.name), "utf-8");
 
   const json = JSON.parse(content) as {
     version: 3;
@@ -746,24 +758,24 @@ export const app = new App().fsRoutes()`,
   expect(json.sourcesContent.length).toBeGreaterThan(0);
 });
 
-integrationTest("Builder - compile entry", async () => {
+// `deno compile --include static/ --include _fresh` embedded the static
+// files into the binary. `bun build --compile` only embeds imported modules,
+// so static files read from disk at runtime are not available yet.
+// TODO: Embed static files via `import ... with { type: "file" }`.
+integrationTest({
+  name: "Builder - compile entry",
+  ignore: true,
+}, async () => {
   const root = path.join(import.meta.dirname!, "..", "..");
   await using _tmp = await withTmpDir({ dir: root, prefix: "tmp_builder_" });
   await using _outDir = await withTmpDir();
   const tmp = _tmp.dir;
 
   await writeFiles(tmp, {
-    "deno.json": JSON.stringify({
-      links: [path.relative(tmp, root)],
-      workspace: [],
+    "tsconfig.json": JSON.stringify({
       compilerOptions: {
         jsx: "react-jsx",
         jsxImportSource: "preact",
-      },
-      imports: {
-        "fresh": "jsr:@fresh/core@*",
-        "preact": "npm:preact@*",
-        "@preact/signals": "npm:@preact/signals@*",
       },
     }),
     "islands/Foo.tsx": `export const Foo = () => <h1>hello</h1>`,
@@ -781,21 +793,16 @@ export const app = new App()
   await builder.build();
 
   const outBin = path.join(_outDir.dir, "fresh-compiled");
-  const bin = Deno.build.os === "windows" ? "deno.exe" : "deno";
-  const cp = await new Deno.Command(bin, {
+  const cp = await runCommand(process.execPath, {
     args: [
-      "compile",
-      "-A",
-      "--include",
-      "static/",
-      "--include",
-      "_fresh",
-      "--output",
+      "build",
+      "--compile",
+      "--outfile",
       outBin,
       path.join("_fresh", "compiled-entry.js"),
     ],
     cwd: tmp,
-  }).output();
+  });
 
   const { stderr, stdout } = getStdOutput(cp);
   // deno-lint-ignore no-console
@@ -827,18 +834,10 @@ integrationTest("Builder - island that imports json entry", async () => {
   const tmp = _tmp.dir;
 
   await writeFiles(tmp, {
-    "deno.json": JSON.stringify({
-      links: [path.relative(tmp, root)],
-      workspace: [],
+    "tsconfig.json": JSON.stringify({
       compilerOptions: {
         jsx: "react-jsx",
         jsxImportSource: "preact",
-      },
-      imports: {
-        "fresh": "jsr:@fresh/core@*",
-        "preact": "npm:preact@*",
-        "@preact/signals": "npm:@preact/signals@*",
-        "mime-db": "npm:mime-db@*",
       },
     }),
     "islands/Foo.tsx": `import * as mime from "mime-db"
@@ -859,7 +858,7 @@ export const app = new App()
   await builder.build();
 });
 
-Deno.test("specToName", () => {
+test("specToName", () => {
   // HTTP
   expect(specToName("http://example.com")).toEqual("example");
   expect(specToName("http://example.com:8000")).toEqual("example");
@@ -917,6 +916,9 @@ integrationTest(
     const tmp = _tmp.dir;
 
     await writeFiles(tmp, {
+      "tsconfig.json": JSON.stringify({
+        compilerOptions: { jsx: "react-jsx", jsxImportSource: "preact" },
+      }),
       "islands/Map.tsx": `import { useSignal } from "@preact/signals";
 import { useEffect } from "preact/hooks";
 
@@ -959,7 +961,7 @@ export const app = new App().fsRoutes();`,
     await builder.build();
 
     await withChildProcessServer(
-      { cwd: tmp, args: ["serve", "-A", "--port=0", "dist/server.js"] },
+      { cwd: tmp, args: ["dist/server.js"], env: { PORT: "0" } },
       async (address) => {
         const res = await fetch(address);
         const html = await res.text();

@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 import { expect } from "@std/expect/expect";
 import * as babel from "@babel/core";
 import { codeEvalPlugin } from "./code_eval.ts";
@@ -20,7 +21,7 @@ function runTest(
   expect(output).toEqual(options.expected);
 }
 
-Deno.test("code eval - resolve runtime conditional detection", () => {
+test("code eval - resolve runtime conditional detection", () => {
   runTest({
     env: "client",
     mode: "development",
@@ -67,7 +68,7 @@ Deno.test("code eval - resolve runtime conditional detection", () => {
   });
 });
 
-Deno.test("code eval - resolve process.env.NODE_ENV", () => {
+test("code eval - resolve process.env.NODE_ENV", () => {
   runTest({
     env: "client",
     mode: "development",
@@ -91,7 +92,7 @@ Deno.test("code eval - resolve process.env.NODE_ENV", () => {
   });
 });
 
-Deno.test("code eval - npm:debug", () => {
+test("code eval - npm:debug", () => {
   runTest({
     env: "server",
     mode: "development",
@@ -105,7 +106,7 @@ Deno.test("code eval - npm:debug", () => {
   });
 });
 
-Deno.test("code eval - npm:pg", () => {
+test("code eval - npm:pg", () => {
   runTest({
     env: "server",
     mode: "development",
@@ -118,7 +119,7 @@ Deno.test("code eval - npm:pg", () => {
   });
 });
 
-Deno.test("code eval - npm:pg #2", () => {
+test("code eval - npm:pg #2", () => {
   runTest({
     env: "server",
     mode: "development",

@@ -52,8 +52,7 @@ const isDarkMode = localStorage.theme === "dark"
     && window.matchMedia("(prefers-color-scheme: dark)").matches);
 document.documentElement.dataset.theme = isDarkMode ? "dark" : "light";`,
           }}
-        >
-        </script>
+        ></script>
       </head>
       <body>
         <Component />

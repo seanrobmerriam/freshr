@@ -1,6 +1,10 @@
+import * as fs from "node:fs";
+import * as fsp from "node:fs/promises";
+import { createRequire } from "node:module";
+import * as net from "node:net";
 import { createBuilder } from "vite";
 import * as path from "@std/path";
-import { walk } from "@std/fs/walk";
+import { walk } from "fresh/internal-dev";
 import { integrationTest, withTmpDir } from "../../fresh/src/test_utils.ts";
 import { withChildProcessServer } from "../../fresh/tests/test_utils.tsx";
 
@@ -9,17 +13,49 @@ export { integrationTest };
 export const DEMO_DIR = path.join(import.meta.dirname!, "..", "demo");
 export const FIXTURE_DIR = path.join(import.meta.dirname!, "fixtures");
 
+/** Path to the Vite CLI, executed with Bun. */
+const vitePkgPath = createRequire(import.meta.url).resolve(
+  "vite/package.json",
+);
+export const VITE_BIN = path.join(
+  path.dirname(vitePkgPath),
+  // deno-lint-ignore no-explicit-any
+  (JSON.parse(fs.readFileSync(vitePkgPath, "utf-8")) as any).bin.vite,
+);
+
+/**
+ * Find a free TCP port. Vite's CLI treats `--port 0` as "not set" and falls
+ * back to 5173. On macOS `localhost` is dual-stack, so a second server can
+ * bind 5173 on the other address family instead of picking a new port and
+ * requests end up at the wrong server.
+ */
+export function getFreePort(): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const server = net.createServer();
+    server.unref();
+    server.on("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      const { port } = server.address() as net.AddressInfo;
+      server.close(() => resolve(port));
+    });
+  });
+}
+
+async function viteDevArgs(): Promise<string[]> {
+  return [VITE_BIN, "--port", String(await getFreePort()), "--strictPort"];
+}
+
 export async function updateFile(
   filePath: string,
   fn: (text: string) => string | Promise<string>,
 ) {
-  const original = await Deno.readTextFile(filePath);
+  const original = await fsp.readFile(filePath, "utf-8");
   const result = await fn(original);
-  await Deno.writeTextFile(filePath, result);
+  await fsp.writeFile(filePath, result);
 
   return {
     async [Symbol.asyncDispose]() {
-      await Deno.writeTextFile(filePath, original);
+      await fsp.writeFile(filePath, original);
     },
   };
 }
@@ -36,15 +72,9 @@ async function copyDir(from: string, to: string) {
       const relative = path.relative(from, entry.path);
       const target = path.join(to, relative);
 
-      try {
-        await Deno.mkdir(path.dirname(target), { recursive: true });
-      } catch (err) {
-        if (!(err instanceof Deno.errors.NotFound)) {
-          throw err;
-        }
-      }
+      await fsp.mkdir(path.dirname(target), { recursive: true });
 
-      await Deno.copyFile(entry.path, target);
+      await fsp.copyFile(entry.path, target);
     }
   }
 }
@@ -57,7 +87,7 @@ export async function prepareDevServer(fixtureDir: string) {
 
   await copyDir(fixtureDir, tmp.dir);
 
-  await Deno.writeTextFile(
+  await fsp.writeFile(
     path.join(tmp.dir, "vite.config.ts"),
     `import { defineConfig } from "vite";
 import { fresh } from "@fresh/plugin-vite";
@@ -81,7 +111,7 @@ export async function launchDevServer(
   await withChildProcessServer(
     {
       cwd: dir,
-      args: ["run", "-A", "--cached-only", "npm:vite", "--port", "0"],
+      args: await viteDevArgs(),
       env,
     },
     async (address) => await fn(address, dir),
@@ -100,7 +130,7 @@ export async function spawnDevServer(
   const server = withChildProcessServer(
     {
       cwd: dir,
-      args: ["run", "-A", "--cached-only", "npm:vite", "--port", "0"],
+      args: await viteDevArgs(),
       env,
     },
     async (address) => {
@@ -183,14 +213,14 @@ export async function buildVite(
 }
 
 export function usingEnv(name: string, value: string) {
-  const prev = Deno.env.get(name);
-  Deno.env.set(name, value);
+  const prev = process.env[name];
+  process.env[name] = value;
   return {
     [Symbol.dispose]: () => {
       if (prev === undefined) {
-        Deno.env.delete(name);
+        delete process.env[name];
       } else {
-        Deno.env.set(name, prev);
+        process.env[name] = prev;
       }
     },
   };
@@ -210,8 +240,9 @@ export async function launchProd(
   return await withChildProcessServer(
     {
       cwd: options.cwd,
-      args: options.args ??
-        ["serve", "-A", "--cached-only", "--port", "0", "_fresh/server.js"],
+      args: options.args ?? ["_fresh/server.js"],
+      bin: options.bin,
+      env: { PORT: "0", ...options.env },
     },
     fn,
   );

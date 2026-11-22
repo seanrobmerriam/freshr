@@ -1,5 +1,6 @@
+import * as fsp from "node:fs/promises";
 import { expect } from "@std/expect";
-import { walk } from "@std/fs/walk";
+import { walk } from "fresh/internal-dev";
 import {
   waitFor,
   waitForText,
@@ -34,11 +35,11 @@ integrationTest("vite build - launches", async () => {
 });
 
 integrationTest("vite build - creates compiled entry", async () => {
-  const stat = await Deno.stat(
+  const stat = await fsp.stat(
     path.join(viteResult.tmp, "_fresh", "compiled-entry.js"),
   );
 
-  expect(stat.isFile).toEqual(true);
+  expect(stat.isFile()).toEqual(true);
 });
 
 integrationTest("vite build - serves static files", async () => {
@@ -249,7 +250,7 @@ integrationTest(
 
     // We're running on GitHub Actions, so GITHUB_SHA will always
     // be set
-    Deno.env.delete("GITHUB_SHA");
+    delete process.env["GITHUB_SHA"];
 
     for (
       const key of [
@@ -506,7 +507,7 @@ integrationTest(
         includeDirs: false,
       })
     ) {
-      const content = await Deno.readTextFile(entry.path);
+      const content = await fsp.readFile(entry.path, "utf-8");
       inspected.push(path.relative(serverDir, entry.path));
       expect(content).not.toContain(FRESH_CSS_PLACEHOLDER);
     }
@@ -520,8 +521,9 @@ integrationTest(
   async () => {
     await using res = await buildVite(NON_ISLAND_CSS_MODULES_FIXTURE);
 
-    const serverEntryJs = await Deno.readTextFile(
+    const serverEntryJs = await fsp.readFile(
       path.join(res.tmp, "_fresh", "server", "server-entry.mjs"),
+      "utf-8",
     );
 
     const cssRefs = serverEntryJs.match(/"\/assets\/server-entry-.*?\.css"/g) ??
@@ -580,8 +582,9 @@ integrationTest("vite build - base path asset handling", async () => {
   await using res = await buildVite(DEMO_DIR, { base: "/my-app/" });
 
   // Read the generated server.js to check asset paths
-  const serverJs = await Deno.readTextFile(
+  const serverJs = await fsp.readFile(
     path.join(res.tmp, "_fresh", "server.js"),
+    "utf-8",
   );
 
   // Asset paths should include the base path /my-app/
@@ -598,8 +601,9 @@ integrationTest(
       },
     });
 
-    const serverJs = await Deno.readTextFile(
+    const serverJs = await fsp.readFile(
       path.join(res.tmp, "_fresh", "server.js"),
+      "utf-8",
     );
 
     // When custom entryFileNames is set, server.js should use the actual
@@ -676,8 +680,10 @@ integrationTest(
 
     // List all compiled route files
     const files: string[] = [];
-    for await (const entry of Deno.readDir(serverAssetsDir)) {
-      if (entry.isFile && entry.name.startsWith("_fresh-route")) {
+    for (
+      const entry of await fsp.readdir(serverAssetsDir, { withFileTypes: true })
+    ) {
+      if (entry.isFile() && entry.name.startsWith("_fresh-route")) {
         files.push(entry.name);
       }
     }
@@ -737,11 +743,11 @@ integrationTest(
     );
 
     // Check that files were generated
-    const swStat = await Deno.stat(swPath);
-    expect(swStat.isFile).toEqual(true);
+    const swStat = await fsp.stat(swPath);
+    expect(swStat.isFile()).toEqual(true);
 
-    const manifestStat = await Deno.stat(manifestPath);
-    expect(manifestStat.isFile).toEqual(true);
+    const manifestStat = await fsp.stat(manifestPath);
+    expect(manifestStat.isFile()).toEqual(true);
   },
 );
 

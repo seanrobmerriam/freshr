@@ -1,10 +1,9 @@
-import type { Plugin } from "vite";
+import type { Plugin, UserConfig } from "vite";
 import {
   type FreshViteConfig,
   pathWithRoot,
   type ResolvedFreshViteConfig,
 } from "./utils.ts";
-import { deno } from "./plugins/deno.ts";
 
 import prefresh from "@prefresh/vite";
 import { serverEntryPlugin } from "./plugins/server_entry.ts";
@@ -14,6 +13,7 @@ import { buildIdPlugin } from "./plugins/build_id.ts";
 import { clientSnapshot } from "./plugins/client_snapshot.ts";
 import { serverSnapshot } from "./plugins/server_snapshot.ts";
 import { patches } from "./plugins/patches.ts";
+import { registrySpecifiers } from "./plugins/registry_specifiers.ts";
 import process from "node:process";
 import {
   specToName,
@@ -24,7 +24,8 @@ import {
 } from "@fresh/core/internal-dev";
 import { checkImports } from "./plugins/verify_imports.ts";
 import { isBuiltin } from "node:module";
-import { load as stdLoadEnv } from "@std/dotenv";
+import { parse as parseDotenv } from "@std/dotenv/parse";
+import * as fsp from "node:fs/promises";
 import path from "node:path";
 
 export type { FreshViteConfig };
@@ -95,7 +96,7 @@ export function fresh(config?: FreshViteConfig): Plugin[] {
             watch: {
               // Ignore temp files, editor swap files, and Vite timestamp
               // files. On Linux, these short-lived files can trigger a
-              // watchFs race condition in Deno where the watcher tries to
+              // watcher race condition where the watcher tries to
               // open a file that has already been deleted, crashing the
               // dev server with ENOENT.
               ignored: [
@@ -215,6 +216,7 @@ export function fresh(config?: FreshViteConfig): Plugin[] {
                   input: {
                     "server-entry": "fresh:server_entry",
                   },
+                  output: ssrOutputNames(config),
                 },
               },
             },
@@ -249,6 +251,7 @@ export function fresh(config?: FreshViteConfig): Plugin[] {
         await loadEnvFile(path.join(envDir, `.env.${mode}.local`));
       },
     },
+    registrySpecifiers(),
     serverEntryPlugin(fConfig),
     patches(),
     ...serverSnapshot(fConfig),
@@ -258,7 +261,7 @@ export function fresh(config?: FreshViteConfig): Plugin[] {
     ...devServer(fConfig),
     prefresh({
       include: [/\.[cm]?[tj]sx?$/],
-      exclude: [/node_modules/, /[\\/]+deno[\\/]+npm[\\/]+/],
+      exclude: [/node_modules/],
       parserPlugins: [
         "importMeta",
         "explicitResourceManagement",
@@ -268,17 +271,44 @@ export function fresh(config?: FreshViteConfig): Plugin[] {
     checkImports({ checks: fConfig.checkImports }),
   ];
 
-  if (typeof process.versions.deno === "string") {
-    plugins.push(deno());
-  }
-
   return plugins;
 }
 
+/**
+ * Vite names SSR output `.mjs` unless the nearest `package.json` has
+ * `"type": "module"`, which is the default for Bun projects. Always use
+ * `.mjs` so that the build output matches across runtimes. Names configured
+ * by the user take precedence.
+ */
+function ssrOutputNames(
+  config: UserConfig,
+): { entryFileNames?: string; chunkFileNames?: string } | undefined {
+  const output = config.environments?.ssr?.build?.rollupOptions?.output ??
+    config.build?.rollupOptions?.output;
+  if (Array.isArray(output)) return undefined;
+  const names: { entryFileNames?: string; chunkFileNames?: string } = {};
+  if (output?.entryFileNames === undefined) {
+    names.entryFileNames = "[name].mjs";
+  }
+  if (output?.chunkFileNames === undefined) {
+    names.chunkFileNames = "assets/[name]-[hash].mjs";
+  }
+  return names;
+}
+
+/**
+ * Load a `.env` file into `process.env`. Existing environment variables
+ * take precedence, same as `@std/dotenv`'s `load({ export: true })`.
+ */
 async function loadEnvFile(envPath: string) {
+  let text: string;
   try {
-    await stdLoadEnv({ envPath, export: true });
+    text = await fsp.readFile(envPath, "utf-8");
   } catch {
-    // Ignore
+    return;
+  }
+  const parsed = parseDotenv(text);
+  for (const [key, value] of Object.entries(parsed)) {
+    if (process.env[key] === undefined) process.env[key] = value;
   }
 }

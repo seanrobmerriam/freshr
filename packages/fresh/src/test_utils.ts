@@ -1,21 +1,25 @@
+import type { test as bunTest } from "bun:test";
 import { Context, type ServerIslandRegistry } from "./context.ts";
 import type { FsAdapter } from "./fs.ts";
 import type { BuildCache, StaticFile } from "./build_cache.ts";
 import type { ResolvedFreshConfig } from "./config.ts";
-import type { WalkEntry } from "@std/fs/walk";
+import type { WalkEntry } from "./fs.ts";
 import { DEFAULT_CONN_INFO } from "./app.ts";
 import type { Command } from "./commands.ts";
 import { fsItemsToCommands, type FsRouteFile } from "./fs_routes.ts";
 import * as path from "@std/path";
 import { toPosix } from "./dev/dev_build_cache.ts";
+import * as fsp from "node:fs/promises";
+import * as os from "node:os";
+import type { ServeHandlerInfo } from "./server.ts";
 
-const STUB = {} as unknown as Deno.ServeHandlerInfo;
+const STUB = {} as unknown as ServeHandlerInfo;
 
 export class FakeServer {
   constructor(
     public handler: (
       req: Request,
-      info: Deno.ServeHandlerInfo,
+      info: ServeHandlerInfo,
     ) => Response | Promise<Response>,
   ) {}
 
@@ -131,7 +135,9 @@ export function createFakeFs(files: Record<string, unknown>): FsAdapter {
     },
     async mkdirp(_dir: string) {
     },
-    readFile: Deno.readFile,
+    async readFile(path) {
+      return new Uint8Array(await fsp.readFile(path));
+    },
     // deno-lint-ignore require-await
     async readTextFile(path) {
       return String(files[String(path)]);
@@ -139,20 +145,55 @@ export function createFakeFs(files: Record<string, unknown>): FsAdapter {
   };
 }
 
+const REPO_TSCONFIG = path.join(
+  import.meta.dirname!,
+  "..",
+  "..",
+  "..",
+  "tsconfig.json",
+);
+
 export const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export async function withTmpDir(
-  options?: Deno.MakeTempOptions,
+  options?: {
+    dir?: string;
+    prefix?: string;
+    suffix?: string;
+    /**
+     * Write a `tsconfig.json` extending the repository one into temp dirs
+     * created inside the repository. Default: `true`.
+     */
+    tsconfig?: boolean;
+  },
 ): Promise<{ dir: string } & AsyncDisposable> {
-  const dir = await Deno.makeTempDir(options);
+  const parent = options?.dir ?? os.tmpdir();
+  await fsp.mkdir(parent, { recursive: true });
+  let dir = await fsp.mkdtemp(
+    parent.replace(/[\\/]$/, "") + "/" + (options?.prefix ?? "tmp-"),
+  );
+  if (options?.suffix) {
+    await fsp.rename(dir, dir + options.suffix);
+    dir = dir + options.suffix;
+  }
+  if (options?.dir !== undefined && options.tsconfig !== false) {
+    // Deno discovered the workspace `deno.json` from any nested directory.
+    // Bun only looks for `tsconfig.json` between the file and the current
+    // working directory, so give temp projects inside the repo a config
+    // that extends the root one. Tests may overwrite it.
+    await fsp.writeFile(
+      path.join(dir, "tsconfig.json"),
+      JSON.stringify({ extends: REPO_TSCONFIG }),
+    );
+  }
   return {
     dir,
     async [Symbol.asyncDispose]() {
       // Skip pointless cleanup in CI, speed up tests
-      if (Deno.env.get("CI") === "true") return;
+      if (process.env.CI === "true") return;
 
       try {
-        await Deno.remove(dir, { recursive: true });
+        await fsp.rm(dir, { recursive: true, force: true });
       } catch {
         // Temp files are not cleaned up automatically on Windows
         // deno-lint-ignore no-console
@@ -188,23 +229,22 @@ export class MockBuildCache<State> implements BuildCache<State> {
 }
 
 /**
- * Wrapper around `Deno.test` for integration tests that disables sanitizers.
- * Accepts either a name string or an options object (without `fn`), plus the
- * test function.
+ * Wrapper around `bun:test` for integration tests. These typically spin up
+ * builds or servers so they get a generous timeout.
+ * Accepts either a name string or an options object, plus the test function.
  */
 export function integrationTest(
-  nameOrOptions: string | Omit<Deno.TestDefinition, "fn">,
+  nameOrOptions: string | { name: string; ignore?: boolean; only?: boolean },
   fn: () => void | Promise<void>,
 ): void {
   const options = typeof nameOrOptions === "string"
     ? { name: nameOrOptions }
     : nameOrOptions;
-  Deno.test({
-    ...options,
-    fn,
-    sanitizeOps: false,
-    sanitizeResources: false,
-  });
+  // Resolved lazily: importing "bun:test" at the top level would break this
+  // module in production since `app.ts` depends on it.
+  const { test } = require("bun:test") as { test: typeof bunTest };
+  const t = options.ignore ? test.skip : options.only ? test.only : test;
+  t(options.name, fn, 120_000);
 }
 
 export async function writeFiles(dir: string, files: Record<string, string>) {
@@ -212,13 +252,7 @@ export async function writeFiles(dir: string, files: Record<string, string>) {
   await Promise.all(entries.map(async (entry) => {
     const [pathname, content] = entry;
     const fullPath = path.join(dir, pathname);
-    try {
-      await Deno.mkdir(path.dirname(fullPath), { recursive: true });
-      await Deno.writeTextFile(fullPath, content);
-    } catch (err) {
-      if (!(err instanceof Deno.errors.AlreadyExists)) {
-        throw err;
-      }
-    }
+    await fsp.mkdir(path.dirname(fullPath), { recursive: true });
+    await fsp.writeFile(fullPath, content);
   }));
 }

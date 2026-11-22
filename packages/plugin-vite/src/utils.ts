@@ -9,12 +9,12 @@ export function pathWithRoot(fileOrDir: string, root?: string): string {
   if (path.isAbsolute(fileOrDir)) return fileOrDir;
 
   if (root === undefined) {
-    return path.join(Deno.cwd(), fileOrDir);
+    return path.join(process.cwd(), fileOrDir);
   }
 
   if (path.isAbsolute(root)) return path.join(root, fileOrDir);
 
-  return path.join(Deno.cwd(), root, fileOrDir);
+  return path.join(process.cwd(), root, fileOrDir);
 }
 
 export interface FreshState {

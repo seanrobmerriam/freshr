@@ -1,0 +1,51 @@
+{
+  "name": "@fresh/plugin-vite",
+  "version": "1.1.2",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/mod.ts",
+    "./client": "./src/client.ts"
+  },
+  "scripts": {
+    "demo": "bun --bun vite demo",
+    "debug": "bun --inspect-brk --bun vite demo",
+    "demo:build": "bun --bun vite build demo",
+    "demo:start": "cd demo && bun _fresh/server.js"
+  },
+  "dependencies": {
+    "@babel/core": "^7.28.0",
+    "@babel/preset-react": "^7.27.1",
+    "@fresh/core": "workspace:packages/fresh",
+    "@prefresh/vite": "^2.4.8",
+    "@remix-run/node-fetch-server": "^0.12.0",
+    "@std/dotenv": "npm:@jsr/std__dotenv@^0.225.5",
+    "@std/fmt": "npm:@jsr/std__fmt@^1.0.8",
+    "@std/media-types": "npm:@jsr/std__media-types@^1.1.0",
+    "@std/path": "npm:@jsr/std__path@^1.1.2",
+    "fresh": "workspace:packages/fresh",
+    "mime-db": "^1.54.0",
+    "preact": "^10.26.9",
+    "vite": "^7.1.4"
+  },
+  "devDependencies": {
+    "@marvinh-test/import-json": "npm:@jsr/marvinh-test__import-json@^0.0.1",
+    "@radix-ui/themes": "^3.2.1",
+    "@supabase/postgrest-js": "^1.21.4",
+    "@tailwindcss/vite": "^4.1.12",
+    "@types/babel__core": "^7.20.5",
+    "@types/node": "^24.1.0",
+    "@types/pg": "^8.15.5",
+    "@types/qs": "^6.14.0",
+    "feed": "^5.1.0",
+    "ioredis": "^5.7.0",
+    "pg": "^8.16.3",
+    "qs": "^6.14.0",
+    "redis": "5.9.0",
+    "rollup": "^4.55.1",
+    "rollup-plugin-visualizer": "^6.0.3",
+    "stripe": "^19.1.0",
+    "vite-plugin-inspect": "^11.3.2",
+    "vite-plugin-pwa": "^1.0.3"
+  }
+}

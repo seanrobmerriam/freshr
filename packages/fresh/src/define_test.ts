@@ -1,8 +1,9 @@
+import { test } from "bun:test";
 import { expect } from "@std/expect";
 import { createDefine } from "./define.ts";
 import { page } from "./handlers.ts";
 
-Deno.test.ignore("createDefine", () => {
+test.skip("createDefine", () => {
   const define = createDefine<{ foo: number }>();
 
   // Testing the types

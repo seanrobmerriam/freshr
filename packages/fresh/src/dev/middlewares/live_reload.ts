@@ -15,12 +15,12 @@ export function liveReload<T>(): Middleware<T> {
         return new Response(null, { status: 501 });
       }
 
-      // TODO: When a change is made the Deno server restarts,
+      // TODO: When a change is made the server restarts,
       // so for now the WebSocket connection is only used for
       // the client to know when the server is back up. Once we
       // have HMR we'll actively start sending messages back
       // and forth.
-      const { response, socket } = Deno.upgradeWebSocket(req);
+      const { response, socket } = ctx.upgrade();
 
       socket.addEventListener("open", () => {
         socket.send(

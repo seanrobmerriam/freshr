@@ -1,8 +1,10 @@
+import { test } from "bun:test";
+import { serve } from "./server.ts";
 import { expect } from "@std/expect";
 import { App } from "./app.ts";
 import { FakeServer } from "./test_utils.ts";
 
-Deno.test("ctx.upgrade() - throws 400 on non-WebSocket request", async () => {
+test("ctx.upgrade() - throws 400 on non-WebSocket request", async () => {
   const app = new App()
     .get("/ws", (ctx) => ctx.upgrade({ message() {} }));
 
@@ -11,7 +13,7 @@ Deno.test("ctx.upgrade() - throws 400 on non-WebSocket request", async () => {
   expect(res.status).toEqual(400);
 });
 
-Deno.test("app.ws() - throws 400 on non-WebSocket request", async () => {
+test("app.ws() - throws 400 on non-WebSocket request", async () => {
   const app = new App()
     .ws("/ws", { message() {} });
 
@@ -20,7 +22,7 @@ Deno.test("app.ws() - throws 400 on non-WebSocket request", async () => {
   expect(res.status).toEqual(400);
 });
 
-Deno.test("ctx.upgrade() - bare mode with options", async () => {
+test("ctx.upgrade() - bare mode with options", async () => {
   const app = new App()
     .get("/ws", (ctx) => {
       // Options-only call must return { socket, response } (bare mode),
@@ -31,14 +33,14 @@ Deno.test("ctx.upgrade() - bare mode with options", async () => {
     });
 
   const ac = new AbortController();
-  const server = Deno.serve({
+  const server = serve({
     hostname: "127.0.0.1",
     port: 0,
     signal: ac.signal,
     onListen: () => {},
   }, app.handler());
 
-  const port = server.addr.port;
+  const port = server.port;
 
   const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`, "graphql-ws");
   const received = new Promise<string>((resolve, reject) => {
@@ -56,7 +58,7 @@ Deno.test("ctx.upgrade() - bare mode with options", async () => {
   await server.finished;
 });
 
-Deno.test("ctx.upgrade() - managed echo", async () => {
+test("ctx.upgrade() - managed echo", async () => {
   const app = new App()
     .get("/ws", (ctx) =>
       ctx.upgrade({
@@ -66,14 +68,14 @@ Deno.test("ctx.upgrade() - managed echo", async () => {
       }));
 
   const ac = new AbortController();
-  const server = Deno.serve({
+  const server = serve({
     hostname: "127.0.0.1",
     port: 0,
     signal: ac.signal,
     onListen: () => {},
   }, app.handler());
 
-  const port = server.addr.port;
+  const port = server.port;
 
   const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`);
   const received = new Promise<string>((resolve, reject) => {
@@ -90,7 +92,7 @@ Deno.test("ctx.upgrade() - managed echo", async () => {
   await server.finished;
 });
 
-Deno.test("ctx.upgrade() - bare overload", async () => {
+test("ctx.upgrade() - bare overload", async () => {
   const app = new App()
     .get("/ws", (ctx) => {
       const { socket, response } = ctx.upgrade();
@@ -99,14 +101,14 @@ Deno.test("ctx.upgrade() - bare overload", async () => {
     });
 
   const ac = new AbortController();
-  const server = Deno.serve({
+  const server = serve({
     hostname: "127.0.0.1",
     port: 0,
     signal: ac.signal,
     onListen: () => {},
   }, app.handler());
 
-  const port = server.addr.port;
+  const port = server.port;
 
   const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`);
   const received = new Promise<string>((resolve, reject) => {
@@ -123,7 +125,7 @@ Deno.test("ctx.upgrade() - bare overload", async () => {
   await server.finished;
 });
 
-Deno.test("app.ws() - echo shorthand", async () => {
+test("app.ws() - echo shorthand", async () => {
   const app = new App()
     .ws("/ws", {
       message(socket, event) {
@@ -132,14 +134,14 @@ Deno.test("app.ws() - echo shorthand", async () => {
     });
 
   const ac = new AbortController();
-  const server = Deno.serve({
+  const server = serve({
     hostname: "127.0.0.1",
     port: 0,
     signal: ac.signal,
     onListen: () => {},
   }, app.handler());
 
-  const port = server.addr.port;
+  const port = server.port;
 
   const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`);
   const received = new Promise<string>((resolve, reject) => {
@@ -156,23 +158,27 @@ Deno.test("app.ws() - echo shorthand", async () => {
   await server.finished;
 });
 
-Deno.test("app.ws() - with options", async () => {
+test("app.ws() - with options", async () => {
   const app = new App()
-    .ws("/ws", {
-      message(socket, event) {
-        socket.send(`ws-opts: ${event.data}`);
+    .ws(
+      "/ws",
+      {
+        message(socket, event) {
+          socket.send(`ws-opts: ${event.data}`);
+        },
       },
-    }, { protocol: "graphql-ws" });
+      { protocol: "graphql-ws" },
+    );
 
   const ac = new AbortController();
-  const server = Deno.serve({
+  const server = serve({
     hostname: "127.0.0.1",
     port: 0,
     signal: ac.signal,
     onListen: () => {},
   }, app.handler());
 
-  const port = server.addr.port;
+  const port = server.port;
 
   const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`, "graphql-ws");
   const received = new Promise<string>((resolve, reject) => {
@@ -190,7 +196,7 @@ Deno.test("app.ws() - with options", async () => {
   await server.finished;
 });
 
-Deno.test("ctx.upgrade() - error handler fires", async () => {
+test("ctx.upgrade() - error handler fires", async () => {
   const errors: Event[] = [];
   const errored = Promise.withResolvers<void>();
 
@@ -212,14 +218,14 @@ Deno.test("ctx.upgrade() - error handler fires", async () => {
       }));
 
   const ac = new AbortController();
-  const server = Deno.serve({
+  const server = serve({
     hostname: "127.0.0.1",
     port: 0,
     signal: ac.signal,
     onListen: () => {},
   }, app.handler());
 
-  const port = server.addr.port;
+  const port = server.port;
 
   const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`);
   await new Promise<void>((resolve) => {
@@ -236,7 +242,7 @@ Deno.test("ctx.upgrade() - error handler fires", async () => {
   await server.finished;
 });
 
-Deno.test("ctx.upgrade() - open and close handlers fire", async () => {
+test("ctx.upgrade() - open and close handlers fire", async () => {
   const events: string[] = [];
   const closed = Promise.withResolvers<void>();
 
@@ -253,14 +259,14 @@ Deno.test("ctx.upgrade() - open and close handlers fire", async () => {
       }));
 
   const ac = new AbortController();
-  const server = Deno.serve({
+  const server = serve({
     hostname: "127.0.0.1",
     port: 0,
     signal: ac.signal,
     onListen: () => {},
   }, app.handler());
 
-  const port = server.addr.port;
+  const port = server.port;
 
   const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`);
   await new Promise<void>((resolve) => {

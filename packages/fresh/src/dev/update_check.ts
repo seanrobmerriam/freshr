@@ -1,6 +1,8 @@
 import * as semver from "@std/semver";
 import * as colors from "@std/fmt/colors";
 import * as path from "@std/path";
+import * as fsp from "node:fs/promises";
+import { isNotFound } from "../server.ts";
 import { CURRENT_FRESH_VERSION } from "../otel.ts";
 
 export interface CheckFile {
@@ -11,24 +13,25 @@ export interface CheckFile {
 }
 
 function getHomeDir(): string | null {
-  switch (Deno.build.os) {
+  const env = process.env;
+  switch (process.platform) {
     case "linux": {
-      const xdg = Deno.env.get("XDG_CACHE_HOME");
+      const xdg = env.XDG_CACHE_HOME;
       if (xdg) return xdg;
 
-      const home = Deno.env.get("HOME");
+      const home = env.HOME;
       if (home) return `${home}/.cache`;
       break;
     }
 
     case "darwin": {
-      const home = Deno.env.get("HOME");
+      const home = env.HOME;
       if (home) return `${home}/Library/Caches`;
       break;
     }
 
-    case "windows":
-      return Deno.env.get("LOCALAPPDATA") ?? null;
+    case "win32":
+      return env.LOCALAPPDATA ?? null;
   }
 
   return null;
@@ -41,9 +44,10 @@ function getFreshCacheDir(): string | null {
 }
 
 async function fetchLatestVersion(): Promise<string> {
-  const res = await fetch("https://dl.deno.land/fresh/release-latest.txt");
+  const res = await fetch("https://registry.npmjs.org/@fresh/core/latest");
   if (res.ok) {
-    return (await res.text()).trim().replace(/^v/, "");
+    const json = await res.json() as { version: string };
+    return json.version.trim().replace(/^v/, "");
   }
 
   throw new Error(`Could not fetch latest version.`);
@@ -59,11 +63,12 @@ export async function updateCheck(
   getLatestVersion = fetchLatestVersion,
   getCurrentVersion = readCurrentVersion,
 ) {
-  // Skip update checks on CI or Deno Deploy
+  // Skip update checks on CI or deployments
   if (
-    Deno.env.get("CI") === "true" ||
-    Deno.env.get("FRESH_NO_UPDATE_CHECK") === "true" ||
-    Deno.env.get("DENO_DEPLOYMENT_ID")
+    process.env.CI === "true" ||
+    process.env.FRESH_NO_UPDATE_CHECK === "true" ||
+    process.env.FRESH_DEPLOYMENT_ID ||
+    process.env.DENO_DEPLOYMENT_ID
   ) {
     return;
   }
@@ -71,13 +76,7 @@ export async function updateCheck(
   const home = getCacheDir();
   if (!home) return;
   const filePath = path.join(home, "latest.json");
-  try {
-    await Deno.mkdir(home, { recursive: true });
-  } catch (err) {
-    if (!(err instanceof Deno.errors.AlreadyExists)) {
-      throw err;
-    }
-  }
+  await fsp.mkdir(home, { recursive: true });
 
   const version = await getCurrentVersion();
 
@@ -87,10 +86,10 @@ export async function updateCheck(
     last_checked: new Date(0).toISOString(),
   };
   try {
-    const text = await Deno.readTextFile(filePath);
+    const text = await fsp.readFile(filePath, "utf-8");
     checkFile = JSON.parse(text);
   } catch (err) {
-    if (!(err instanceof Deno.errors.NotFound)) {
+    if (!isNotFound(err)) {
       throw err;
     }
   }
@@ -132,7 +131,7 @@ export async function updateCheck(
     );
     // deno-lint-ignore no-console
     console.log(
-      `    To upgrade, run: deno run -A -r jsr:@fresh/update`,
+      `    To upgrade, run: bunx @fresh/update@latest`,
     );
     // deno-lint-ignore no-console
     console.log();
@@ -144,5 +143,5 @@ export async function updateCheck(
   }
 
   const raw = JSON.stringify(checkFile, null, 2);
-  await Deno.writeTextFile(filePath, raw);
+  await fsp.writeFile(filePath, raw);
 }

@@ -1,3 +1,6 @@
+import * as fs from "node:fs";
+import { pipeline } from "node:stream/promises";
+import * as fsp from "node:fs/promises";
 import type { DevEnvironment, Plugin } from "vite";
 import * as path from "@std/path";
 import { contentType as getStdContentType } from "@std/media-types/content-type";
@@ -35,7 +38,8 @@ export function devServer(freshConfig: ResolvedFreshViteConfig): Plugin[] {
         // skip those and let Vite handle them. Everything else we route into
         // the Fresh handler with the raw socket + head stashed in
         // `upgradeSourceMap` so `ctx.upgrade()` can finish the handshake via
-        // `Deno.upgradeWebSocket(req, { socket, head })`.
+        // the `ws` package (`ctx.upgrade()` gets the raw socket + head and
+        // the original `IncomingMessage`).
         server.httpServer?.on("upgrade", (nodeReq, nodeSocket, head) => {
           const protocolHeader = nodeReq.headers["sec-websocket-protocol"];
           if (
@@ -72,7 +76,11 @@ export function devServer(freshConfig: ResolvedFreshViteConfig): Plugin[] {
                 headers,
               });
 
-              upgradeSourceMap.set(req, { socket: nodeSocket, head });
+              upgradeSourceMap.set(req, {
+                socket: nodeSocket,
+                head,
+                req: nodeReq,
+              });
 
               const mod = await server.ssrLoadModule("fresh:server_entry");
               mod.setErrorInterceptor((err: unknown) => {
@@ -137,22 +145,17 @@ export function devServer(freshConfig: ResolvedFreshViteConfig): Plugin[] {
           for (const dir of allStaticDirs) {
             const staticFilePath = path.join(dir, decodedPathname);
             try {
-              const stat = await Deno.stat(staticFilePath);
-              if (stat.isFile) {
+              const stat = await fsp.stat(staticFilePath);
+              if (stat.isFile()) {
                 if (dir === publicDir) {
                   // Vite serves publicDir files natively
                   return next();
                 }
                 // Serve files from extra dirs manually
-                const file = await Deno.open(staticFilePath, { read: true });
                 const { ext } = path.parse(staticFilePath);
                 const contentType = getContentType(ext);
                 nodeRes.setHeader("Content-Type", contentType);
-                // deno-lint-ignore no-explicit-any
-                for await (const chunk of file.readable as any) {
-                  nodeRes.write(chunk);
-                }
-                nodeRes.end();
+                await pipeline(fs.createReadStream(staticFilePath), nodeRes);
                 handledStatic = true;
                 break;
               }
@@ -170,7 +173,7 @@ export function devServer(freshConfig: ResolvedFreshViteConfig): Plugin[] {
               "index.html",
             );
             try {
-              const content = await Deno.readTextFile(staticFilePathIndex);
+              const content = await fsp.readFile(staticFilePathIndex, "utf-8");
               nodeRes.setHeader("Content-Type", "text/html; charset=utf-8");
               nodeRes.end(content);
               return;

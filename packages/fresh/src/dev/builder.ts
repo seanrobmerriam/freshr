@@ -28,7 +28,8 @@ import { devErrorOverlay } from "./middlewares/error_overlay/middleware.tsx";
 import { automaticWorkspaceFolders } from "./middlewares/automatic_workspace_folders.ts";
 import { parseDirPath } from "../config.ts";
 import { pathToExportName, UniqueNamer } from "../utils.ts";
-import { checkDenoCompilerOptions } from "./check.ts";
+import { checkCompilerOptions } from "./check.ts";
+import * as fsp from "node:fs/promises";
 import { crawlFsItem } from "./fs_crawl.ts";
 import { TEST_FILE_PATTERN, UPDATE_INTERVAL } from "../constants.ts";
 
@@ -45,7 +46,7 @@ export interface BuildOptions {
    *
    * Other paths, such as `build.outDir`, `staticDir`, and `fsRoutes()`
    * are resolved relative to this directory.
-   * @default Deno.cwd()
+   * @default process.cwd()
    */
   root?: string;
   /**
@@ -125,7 +126,7 @@ export class Builder<State = any> {
   #ready = Promise.withResolvers<void>();
 
   constructor(options?: BuildOptions) {
-    const root = parseDirPath(options?.root ?? ".", Deno.cwd());
+    const root = parseDirPath(options?.root ?? ".", process.cwd());
     const serverEntry = parseDirPath(options?.serverEntry ?? "main.ts", root);
     const outDir = parseDirPath(options?.outDir ?? "_fresh", root);
     const rawStaticDir = options?.staticDir ?? "static";
@@ -240,7 +241,7 @@ export class Builder<State = any> {
    * const builder = new Builder();
    * const applySnapshot = await builder.build({ snapshot: "memory" });
    *
-   * Deno.test("My Test", () => {
+   * test("My Test", () => {
    *   const app = new App()
    *     .get("/", () => new Response("hello"))
    *
@@ -302,7 +303,7 @@ export class Builder<State = any> {
     const { target, outDir, root } = this.config;
     const staticOutDir = path.join(outDir, "static");
 
-    const { denoJson, jsxImportSource } = await checkDenoCompilerOptions(root);
+    const { configPath, jsxImportSource } = await checkCompilerOptions(root);
 
     if (!this.#addedInternalTransforms) {
       this.#addedInternalTransforms = true;
@@ -310,7 +311,7 @@ export class Builder<State = any> {
     }
 
     try {
-      await Deno.remove(staticOutDir);
+      await fsp.rmdir(staticOutDir);
     } catch {
       // Ignore
     }
@@ -353,7 +354,7 @@ export class Builder<State = any> {
       buildId: BUILD_ID,
       entryPoints,
       jsxImportSource,
-      denoJsonPath: denoJson,
+      configPath,
       sourceMap: this.config.sourceMap,
     });
 

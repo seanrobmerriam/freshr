@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 import { expect } from "@std/expect/expect";
 import * as babel from "@babel/core";
 import { removePolyfills } from "./remove_polyfills.ts";
@@ -13,7 +14,7 @@ function runTest(options: { input: string; expected: string }) {
   expect(output).toEqual(options.expected);
 }
 
-Deno.test("remove polyfills - Object.keys", () => {
+test("remove polyfills - Object.keys", () => {
   runTest({
     input: `if (!Object.keys) {
     Object.keys = function (o) {
@@ -30,7 +31,7 @@ Object.keys({ foo: "bar" });`,
   });
 });
 
-Deno.test("remove polyfills - Object.create", () => {
+test("remove polyfills - Object.create", () => {
   runTest({
     input: `if (!Object.create) {
   Object.create = function (o) {
@@ -46,7 +47,7 @@ Object.create({});`,
   });
 });
 
-Deno.test("remove polyfills - keep alternate", () => {
+test("remove polyfills - keep alternate", () => {
   runTest({
     input: `if (!Object.create) {
   Object.create = function (o) {
@@ -64,7 +65,7 @@ Deno.test("remove polyfills - keep alternate", () => {
   });
 });
 
-Deno.test("remove polyfills - String.fromCodePoint", () => {
+test("remove polyfills - String.fromCodePoint", () => {
   runTest({
     input: `if (!String.fromCodePoint) {
   foo
@@ -75,7 +76,7 @@ String.fromCodePoint(42);`,
   });
 });
 
-Deno.test("remove polyfills - Keep unrelated unary statements", () => {
+test("remove polyfills - Keep unrelated unary statements", () => {
   runTest({
     input: `if (+String.fromCodePoint) {
   foo;

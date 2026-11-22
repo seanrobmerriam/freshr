@@ -54,8 +54,11 @@ export function RenderingSection() {
           <ExampleArrow class="ml-[55%]" />{" "}
           <DemoBox>
             <p>
-              Freshly server-rendered{" "}
-              {Temporal.Now.plainDateTimeISO().toLocaleString("en-US")}
+              Freshly server-rendered {
+                // deno-lint-ignore no-explicit-any
+                (globalThis as any).Temporal.Now.plainDateTimeISO()
+                  .toLocaleString("en-US")
+              }
             </p>
           </DemoBox>
         </div>

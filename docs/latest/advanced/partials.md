@@ -11,8 +11,8 @@ updated.
 ## Enabling partials
 
 Partials are enabled by adding a `f-client-nav` attribute to an HTML element and
-wrapping one or more areas in the page with a
-`<Partial name="my-partial">`-component.
+wrapping one or more areas in the page with a `<Partial
+name="my-partial">`-component.
 
 The quickest way to get started is to enable partials for every page in
 `routes/_app.tsx` by making the following changes.

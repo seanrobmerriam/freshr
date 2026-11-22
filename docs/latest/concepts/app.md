@@ -17,8 +17,8 @@ app.listen();
 ```
 
 > [tip]: To use JSX in your `main` file (e.g. with
-> `ctx.render(<h1>Hello</h1>)`), rename it to `main.tsx` and set
-> `serverEntry: "main.tsx"` in the `fresh()` plugin options in `vite.config.ts`.
+> `ctx.render(<h1>Hello</h1>)`), rename it to `main.tsx` and set `serverEntry:
+> "main.tsx"` in the `fresh()` plugin options in `vite.config.ts`.
 
 ## Configuration
 
@@ -419,5 +419,5 @@ app.listen({ port: 4000 });
 > To customize the port in the default setup:
 >
 > - **Dev:** set `server.port` in `vite.config.ts`
-> - **Prod:** pass `--port` to `deno serve` in your task, e.g.
->   `"start": "deno serve --port 4000 -A _fresh/server.js"`
+> - **Prod:** pass `--port` to `deno serve` in your task, e.g. `"start": "deno
+>   serve --port 4000 -A _fresh/server.js"`

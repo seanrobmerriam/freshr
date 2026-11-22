@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 /**
  * Tests for the "zero client JS by default" feature.
  *
@@ -39,7 +40,7 @@ function islandApp(): App<unknown> {
 // Static pages (no islands, no f-client-nav)
 // ---------------------------------------------------------------------------
 
-Deno.test("no-client-js - static page emits no module boot script", async () => {
+test("no-client-js - static page emits no module boot script", async () => {
   const app = new App().get("/", (ctx) =>
     ctx.render(
       <Doc>
@@ -59,7 +60,7 @@ Deno.test("no-client-js - static page emits no module boot script", async () => 
   expect(doc.querySelector("h1")?.textContent).toEqual("Hello");
 });
 
-Deno.test("no-client-js - static page does not reference fresh-runtime.js", async () => {
+test("no-client-js - static page does not reference fresh-runtime.js", async () => {
   const app = new App().get("/", (ctx) =>
     ctx.render(
       <Doc>
@@ -75,7 +76,7 @@ Deno.test("no-client-js - static page does not reference fresh-runtime.js", asyn
   expect(html).not.toContain("boot(");
 });
 
-Deno.test("no-client-js - static page has no Link modulepreload header", async () => {
+test("no-client-js - static page has no Link modulepreload header", async () => {
   const app = new App().get("/", (ctx) =>
     ctx.render(
       <Doc>
@@ -96,7 +97,7 @@ Deno.test("no-client-js - static page has no Link modulepreload header", async (
 // (and therefore sees an active RENDER_STATE).
 // ---------------------------------------------------------------------------
 
-Deno.test("no-client-js - f-client-nav='true' page includes boot script", async () => {
+test("no-client-js - f-client-nav='true' page includes boot script", async () => {
   const app = new App()
     .appWrapper(({ Component }) => (
       <html f-client-nav>
@@ -120,7 +121,7 @@ Deno.test("no-client-js - f-client-nav='true' page includes boot script", async 
   expect(html).toContain("boot(");
 });
 
-Deno.test("no-client-js - f-client-nav='false' page emits no boot script", async () => {
+test("no-client-js - f-client-nav='false' page emits no boot script", async () => {
   const app = new App()
     .appWrapper(({ Component }) => (
       <html f-client-nav={false}>
@@ -146,7 +147,7 @@ Deno.test("no-client-js - f-client-nav='false' page emits no boot script", async
 // Pages with islands must still load the client runtime
 // ---------------------------------------------------------------------------
 
-Deno.test("no-client-js - island page includes boot script", async () => {
+test("no-client-js - island page includes boot script", async () => {
   const app = islandApp();
 
   const server = new FakeServer(app.handler());
@@ -158,7 +159,7 @@ Deno.test("no-client-js - island page includes boot script", async () => {
   expect(html).toContain("boot(");
 });
 
-Deno.test("no-client-js - island page references fresh-runtime.js", async () => {
+test("no-client-js - island page references fresh-runtime.js", async () => {
   const app = islandApp();
 
   const server = new FakeServer(app.handler());
@@ -168,7 +169,7 @@ Deno.test("no-client-js - island page references fresh-runtime.js", async () => 
   expect(html).toContain("fresh-runtime");
 });
 
-Deno.test("no-client-js - island page has Link modulepreload header", async () => {
+test("no-client-js - island page has Link modulepreload header", async () => {
   const app = islandApp();
 
   const server = new FakeServer(app.handler());

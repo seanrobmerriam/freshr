@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 import { expect } from "@std/expect";
 import { Context } from "./context.ts";
 import { App } from "fresh";
@@ -6,7 +7,7 @@ import { FakeServer } from "./test_utils.ts";
 import { BUILD_ID } from "@fresh/build-id";
 import { parseHtml } from "../tests/test_utils.tsx";
 
-Deno.test("FreshReqContext.prototype.redirect", () => {
+test("FreshReqContext.prototype.redirect", () => {
   let res = Context.prototype.redirect("/");
   expect(res.status).toEqual(302);
   expect(res.headers.get("Location")).toEqual("/");
@@ -27,7 +28,7 @@ Deno.test("FreshReqContext.prototype.redirect", () => {
   expect(res.status).toEqual(307);
 });
 
-Deno.test("render asset()", async () => {
+test("render asset()", async () => {
   const app = new App()
     .get("/", (ctx) =>
       ctx.render(
@@ -48,7 +49,7 @@ Deno.test("render asset()", async () => {
   expect(doc.querySelector("source")!.src).toContain(BUILD_ID);
 });
 
-Deno.test("ctx.render - throw with no arguments", async () => {
+test("ctx.render - throw with no arguments", async () => {
   const app = new App()
     // deno-lint-ignore no-explicit-any
     .get("/", (ctx) => (ctx as any).render());
@@ -59,7 +60,7 @@ Deno.test("ctx.render - throw with no arguments", async () => {
   expect(res.status).toEqual(500);
 });
 
-Deno.test("ctx.render - throw with invalid first arg", async () => {
+test("ctx.render - throw with invalid first arg", async () => {
   const app = new App()
     // deno-lint-ignore no-explicit-any
     .get("/", (ctx) => (ctx as any).render({}));
@@ -70,7 +71,7 @@ Deno.test("ctx.render - throw with invalid first arg", async () => {
   expect(res.status).toEqual(500);
 });
 
-Deno.test("ctx.redirect - preserves partial search param through redirects", async () => {
+test("ctx.redirect - preserves partial search param through redirects", async () => {
   const app = new App()
     .get("/old", (ctx) => ctx.redirect("/new"));
   const server = new FakeServer(app.handler());
@@ -108,7 +109,7 @@ Deno.test("ctx.redirect - preserves partial search param through redirects", asy
   );
 });
 
-Deno.test("ctx.isPartial - should indicate whether request is partial or not", async () => {
+test("ctx.isPartial - should indicate whether request is partial or not", async () => {
   const isPartials: boolean[] = [];
   const app = new App()
     .get("/", (ctx) => {
@@ -123,7 +124,7 @@ Deno.test("ctx.isPartial - should indicate whether request is partial or not", a
   expect(isPartials).toEqual([false, true]);
 });
 
-Deno.test("ctx.route - should contain matched route", async () => {
+test("ctx.route - should contain matched route", async () => {
   let route: string | null = null;
   const app = new App()
     .use((ctx) => {
@@ -145,7 +146,7 @@ Deno.test("ctx.route - should contain matched route", async () => {
   expect(route).toEqual("/foo/:id");
 });
 
-Deno.test("ctx.text()", async () => {
+test("ctx.text()", async () => {
   const app = new App()
     .get("/", (ctx) => ctx.text("foobar"));
 
@@ -157,7 +158,7 @@ Deno.test("ctx.text()", async () => {
   expect(text).toEqual("foobar");
 });
 
-Deno.test("ctx.html()", async () => {
+test("ctx.html()", async () => {
   const app = new App()
     .get("/", (ctx) => ctx.html("<h1>foo</h1>"));
 
@@ -169,7 +170,7 @@ Deno.test("ctx.html()", async () => {
   expect(text).toEqual("<h1>foo</h1>");
 });
 
-Deno.test("ctx.json()", async () => {
+test("ctx.json()", async () => {
   const app = new App()
     .get("/", (ctx) => ctx.json({ foo: 123 }));
 
@@ -181,7 +182,7 @@ Deno.test("ctx.json()", async () => {
   expect(text).toEqual('{"foo":123}');
 });
 
-Deno.test("ctx.stream() - enqueue values", async () => {
+test("ctx.stream() - enqueue values", async () => {
   function* gen() {
     yield "foo";
     yield new TextEncoder().encode("bar");
@@ -196,7 +197,7 @@ Deno.test("ctx.stream() - enqueue values", async () => {
   expect(text).toEqual("foobar");
 });
 
-Deno.test("ctx.stream() - pass function", async () => {
+test("ctx.stream() - pass function", async () => {
   const app = new App()
     .get("/", (ctx) =>
       ctx.stream(function* () {
@@ -210,7 +211,7 @@ Deno.test("ctx.stream() - pass function", async () => {
   expect(text).toEqual("foobar");
 });
 
-Deno.test("ctx.stream() - support iterable", async () => {
+test("ctx.stream() - support iterable", async () => {
   function* gen() {
     yield "foo";
     yield "bar";
@@ -226,7 +227,7 @@ Deno.test("ctx.stream() - support iterable", async () => {
   expect(text).toEqual("foobar");
 });
 
-Deno.test("ctx.stream() - support async iterable", async () => {
+test("ctx.stream() - support async iterable", async () => {
   async function* gen() {
     yield "foo";
     yield "bar";

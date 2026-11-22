@@ -9,14 +9,18 @@
  */
 
 import type { UpdatePayload } from "vite";
+import type { ViteHotContext } from "vite/types/hot.d.ts";
 import { hashCode } from "./shared.ts";
 
-if (import.meta.hot) {
-  import.meta.hot.on("fresh:reload", () => {
+// `@types/bun` declares its own `import.meta.hot`, use Vite's typing here.
+const hot = import.meta.hot as unknown as ViteHotContext | undefined;
+
+if (hot) {
+  hot.on("fresh:reload", () => {
     window.location.reload();
   });
 
-  import.meta.hot.on("vite:beforeUpdate", (module: UpdatePayload) => {
+  hot.on("vite:beforeUpdate", (module: UpdatePayload) => {
     module.updates.forEach((update) => {
       const moduleStyle = document.querySelector(
         `[vite-module-id="${hashCode(update.acceptedPath)}"]`,

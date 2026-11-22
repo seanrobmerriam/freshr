@@ -44,7 +44,10 @@ export function patches(): Plugin {
           cjsPlugin,
           removePolyfills,
           jsxComments,
-          inlineEnvVarsPlugin(env, Deno.env.toObject()),
+          inlineEnvVarsPlugin(
+            env,
+            { ...process.env } as Record<string, string>,
+          ),
         ];
 
         const res = babel.transformSync(code, {

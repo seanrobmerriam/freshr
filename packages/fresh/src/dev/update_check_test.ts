@@ -1,24 +1,24 @@
+import * as fsp from "node:fs/promises";
+import { test } from "bun:test";
 import * as path from "@std/path";
-import denoJson from "../../deno.json" with { type: "json" };
-import { getStdOutput } from "../../tests/test_utils.tsx";
+import pkgJson from "../../package.json" with { type: "json" };
+import { getStdOutput, runCommand } from "../../tests/test_utils.tsx";
 import { expect } from "@std/expect";
 import { withTmpDir } from "../test_utils.ts";
 import type { CheckFile } from "./update_check.ts";
 import { WEEK } from "../constants.ts";
 import { retry } from "@std/async/retry";
 
-const CURRENT_VERSION = denoJson.version;
+const CURRENT_VERSION = pkgJson.version;
 
 const cwd = import.meta.dirname!;
 
-Deno.test("stores update check file in $HOME/fresh", async () => {
+test("stores update check file in $HOME/fresh", async () => {
   await using tmp = await withTmpDir();
   const filePath = path.join(tmp.dir, "latest.json");
 
-  await new Deno.Command(Deno.execPath(), {
+  await runCommand(process.execPath, {
     args: [
-      "run",
-      "-A",
       path.join(cwd, "../../tests/fixture_update_check/mod.ts"),
     ],
     cwd,
@@ -26,9 +26,9 @@ Deno.test("stores update check file in $HOME/fresh", async () => {
       CI: "false",
       TEST_HOME: tmp.dir,
     },
-  }).output();
+  });
 
-  const text = JSON.parse(await Deno.readTextFile(filePath));
+  const text = JSON.parse(await fsp.readFile(filePath, "utf-8"));
   expect(text).toEqual({
     current_version: CURRENT_VERSION,
     latest_version: "99.99.999",
@@ -37,16 +37,20 @@ Deno.test("stores update check file in $HOME/fresh", async () => {
   });
 });
 
-Deno.test("skips update check on specific environment variables", async (t) => {
-  const envs = ["FRESH_NO_UPDATE_CHECK", "CI", "DENO_DEPLOYMENT_ID"];
+test("skips update check on specific environment variables", async () => {
+  const envs = [
+    "FRESH_NO_UPDATE_CHECK",
+    "CI",
+    "FRESH_DEPLOYMENT_ID",
+    "DENO_DEPLOYMENT_ID",
+  ];
 
   for (const env of envs) {
-    await t.step(`checking ${env}`, async () => {
+    {
+      // step: `checking ${env}`
       await using tmp = await withTmpDir();
-      const out = await new Deno.Command(Deno.execPath(), {
+      const out = await runCommand(process.execPath, {
         args: [
-          "run",
-          "-A",
           path.join(cwd, "../../tests/fixture_update_check/mod.ts"),
         ],
         cwd,
@@ -57,19 +61,19 @@ Deno.test("skips update check on specific environment variables", async (t) => {
         },
         stderr: "piped",
         stdout: "piped",
-      }).output();
+      });
 
       const { stdout } = getStdOutput(out);
       expect(stdout).not.toMatch(/Fresh 1\.30\.0 is available/);
-    });
+    }
   }
 });
 
-Deno.test("shows update message on version mismatch", async () => {
+test("shows update message on version mismatch", async () => {
   await using tmp = await withTmpDir();
   const filePath = path.join(tmp.dir, "latest.json");
 
-  await Deno.writeTextFile(
+  await fsp.writeFile(
     filePath,
     JSON.stringify({
       current_version: "1.1.0",
@@ -78,10 +82,8 @@ Deno.test("shows update message on version mismatch", async () => {
     }),
   );
 
-  const out = await new Deno.Command(Deno.execPath(), {
+  const out = await runCommand(process.execPath, {
     args: [
-      "run",
-      "-A",
       path.join(cwd, "../../tests/fixture_update_check/mod.ts"),
     ],
     cwd,
@@ -92,13 +94,13 @@ Deno.test("shows update message on version mismatch", async () => {
     },
     stderr: "piped",
     stdout: "piped",
-  }).output();
+  });
 
   const { stdout } = getStdOutput(out);
   expect(stdout).toMatch(/Fresh 999\.999\.0 is available/);
 
   // Updates check file
-  const text = JSON.parse(await Deno.readTextFile(filePath));
+  const text = JSON.parse(await fsp.readFile(filePath, "utf-8"));
   expect(text).toEqual({
     current_version: CURRENT_VERSION,
     latest_version: "999.999.0",
@@ -107,14 +109,13 @@ Deno.test("shows update message on version mismatch", async () => {
   });
 });
 
-Deno.test("only fetch new version defined by interval", async (t) => {
+test("only fetch new version defined by interval", async () => {
   await using tmp = await withTmpDir();
 
-  await t.step("fetches latest version initially", async () => {
-    const out = await new Deno.Command(Deno.execPath(), {
+  {
+    // step: "fetches latest version initially"
+    const out = await runCommand(process.execPath, {
       args: [
-        "run",
-        "-A",
         path.join(cwd, "../../tests/fixture_update_check/mod.ts"),
       ],
       cwd,
@@ -126,17 +127,16 @@ Deno.test("only fetch new version defined by interval", async (t) => {
       },
       stderr: "piped",
       stdout: "piped",
-    }).output();
+    });
 
     const { stdout } = getStdOutput(out);
     expect(stdout).toMatch(/fetching latest version/);
-  });
+  }
 
-  await t.step("should not fetch if interval has not passed", async () => {
-    const out = await new Deno.Command(Deno.execPath(), {
+  {
+    // step: "should not fetch if interval has not passed"
+    const out = await runCommand(process.execPath, {
       args: [
-        "run",
-        "-A",
         path.join(cwd, "../../tests/fixture_update_check/mod.ts"),
       ],
       cwd,
@@ -148,17 +148,16 @@ Deno.test("only fetch new version defined by interval", async (t) => {
       },
       stderr: "piped",
       stdout: "piped",
-    }).output();
+    });
 
     const { stdout } = getStdOutput(out);
     expect(stdout).not.toMatch(/fetching latest version/);
-  });
+  }
 
-  await t.step("fetches if interval has passed", async () => {
-    const out = await new Deno.Command(Deno.execPath(), {
+  {
+    // step: "fetches if interval has passed"
+    const out = await runCommand(process.execPath, {
       args: [
-        "run",
-        "-A",
         path.join(cwd, "../../tests/fixture_update_check/mod.ts"),
       ],
       cwd,
@@ -168,14 +167,14 @@ Deno.test("only fetch new version defined by interval", async (t) => {
         TEST_HOME: tmp.dir,
         LATEST_VERSION: "1.30.0",
       },
-    }).output();
+    });
 
     const { stdout } = getStdOutput(out);
     expect(stdout).toMatch(/fetching latest version/);
-  });
+  }
 });
 
-Deno.test("updates current version in cache file", async () => {
+test("updates current version in cache file", async () => {
   await using tmp = await withTmpDir();
 
   const checkFile: CheckFile = {
@@ -184,15 +183,13 @@ Deno.test("updates current version in cache file", async () => {
     last_checked: new Date(Date.now() - WEEK).toISOString(),
   };
 
-  await Deno.writeTextFile(
+  await fsp.writeFile(
     path.join(tmp.dir, "latest.json"),
     JSON.stringify(checkFile, null, 2),
   );
 
-  const out = await new Deno.Command(Deno.execPath(), {
+  const out = await runCommand(process.execPath, {
     args: [
-      "run",
-      "-A",
       path.join(cwd, "../../tests/fixture_update_check/mod.ts"),
     ],
     cwd,
@@ -203,13 +200,13 @@ Deno.test("updates current version in cache file", async () => {
     },
     stderr: "piped",
     stdout: "piped",
-  }).output();
+  });
 
   const { stdout } = getStdOutput(out);
   expect(stdout).not.toMatch(/Fresh .* is available/);
 });
 
-Deno.test("only shows update message when current < latest", async () => {
+test("only shows update message when current < latest", async () => {
   await using tmp = await withTmpDir();
 
   const checkFile: CheckFile = {
@@ -218,15 +215,13 @@ Deno.test("only shows update message when current < latest", async () => {
     last_checked: new Date().toISOString(),
   };
 
-  await Deno.writeTextFile(
+  await fsp.writeFile(
     path.join(tmp.dir, "latest.json"),
     JSON.stringify(checkFile, null, 2),
   );
 
-  const out = await new Deno.Command(Deno.execPath(), {
+  const out = await runCommand(process.execPath, {
     args: [
-      "run",
-      "-A",
       path.join(cwd, "../../tests/fixture_update_check/mod.ts"),
     ],
     cwd,
@@ -238,13 +233,13 @@ Deno.test("only shows update message when current < latest", async () => {
     },
     stderr: "piped",
     stdout: "piped",
-  }).output();
+  });
 
   const { stdout } = getStdOutput(out);
   expect(stdout).not.toMatch(/Fresh .* is available/);
 });
 
-Deno.test("migrates to last_shown property", async () => {
+test("migrates to last_shown property", async () => {
   await using tmp = await withTmpDir();
 
   const checkFile: CheckFile = {
@@ -253,15 +248,13 @@ Deno.test("migrates to last_shown property", async () => {
     last_checked: new Date().toISOString(),
   };
 
-  await Deno.writeTextFile(
+  await fsp.writeFile(
     path.join(tmp.dir, "latest.json"),
     JSON.stringify(checkFile, null, 2),
   );
 
-  const out = await new Deno.Command(Deno.execPath(), {
+  const out = await runCommand(process.execPath, {
     args: [
-      "run",
-      "-A",
       path.join(cwd, "../../tests/fixture_update_check/mod.ts"),
     ],
     cwd,
@@ -273,7 +266,7 @@ Deno.test("migrates to last_shown property", async () => {
     },
     stderr: "piped",
     stdout: "piped",
-  }).output();
+  });
 
   const { stdout, stderr } = getStdOutput(out);
   if (stdout === "") {
@@ -283,8 +276,9 @@ Deno.test("migrates to last_shown property", async () => {
   expect(stdout).toMatch(/Fresh .* is available/);
 
   const checkFileAfter = JSON.parse(
-    await Deno.readTextFile(
+    await fsp.readFile(
       path.join(tmp.dir, "latest.json"),
+      "utf-8",
     ),
   );
 
@@ -292,7 +286,7 @@ Deno.test("migrates to last_shown property", async () => {
   expect(typeof checkFileAfter.last_shown).toEqual("string");
 });
 
-Deno.test("doesn't show update if last_shown + interval >= today", async () => {
+test("doesn't show update if last_shown + interval >= today", async () => {
   await using tmp = await withTmpDir();
 
   const todayMinus1Hour = new Date();
@@ -305,15 +299,13 @@ Deno.test("doesn't show update if last_shown + interval >= today", async () => {
     last_shown: todayMinus1Hour.toISOString(),
   };
 
-  await Deno.writeTextFile(
+  await fsp.writeFile(
     path.join(tmp.dir, "latest.json"),
     JSON.stringify(checkFile, null, 2),
   );
 
-  const out = await new Deno.Command(Deno.execPath(), {
+  const out = await runCommand(process.execPath, {
     args: [
-      "run",
-      "-A",
       path.join(cwd, "../../tests/fixture_update_check/mod.ts"),
     ],
     cwd,
@@ -325,60 +317,56 @@ Deno.test("doesn't show update if last_shown + interval >= today", async () => {
     },
     stderr: "piped",
     stdout: "piped",
-  }).output();
+  });
 
   const { stdout } = getStdOutput(out);
   expect(stdout).not.toMatch(/Fresh .* is available/);
 });
 
-Deno.test(
-  "shows update if last_shown + interval < today",
-  async () => {
-    await retry(async () => {
-      await using tmp = await withTmpDir();
+test("shows update if last_shown + interval < today", async () => {
+  await retry(async () => {
+    await using tmp = await withTmpDir();
 
-      const yesterday = new Date();
-      yesterday.setDate(yesterday.getDate() - 1);
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
 
-      const checkFile: CheckFile = {
-        current_version: "1.2.0",
-        latest_version: "99.999.99",
-        last_checked: new Date().toISOString(),
-        last_shown: yesterday.toISOString(),
-      };
+    const checkFile: CheckFile = {
+      current_version: "1.2.0",
+      latest_version: "99.999.99",
+      last_checked: new Date().toISOString(),
+      last_shown: yesterday.toISOString(),
+    };
 
-      await Deno.writeTextFile(
+    await fsp.writeFile(
+      path.join(tmp.dir, "latest.json"),
+      JSON.stringify(checkFile, null, 2),
+    );
+
+    const out = await runCommand(process.execPath, {
+      args: [
+        path.join(cwd, "../../tests/fixture_update_check/mod.ts"),
+      ],
+      cwd,
+      env: {
+        CI: "false",
+        TEST_HOME: tmp.dir,
+        CURRENT_VERSION: CURRENT_VERSION,
+        LATEST_VERSION: "99999.9999.0",
+      },
+      stderr: "piped",
+      stdout: "piped",
+    });
+
+    const { stdout } = getStdOutput(out);
+    expect(stdout).toMatch(/Fresh .* is available/);
+
+    const checkFileAfter = JSON.parse(
+      await fsp.readFile(
         path.join(tmp.dir, "latest.json"),
-        JSON.stringify(checkFile, null, 2),
-      );
+        "utf-8",
+      ),
+    );
 
-      const out = await new Deno.Command(Deno.execPath(), {
-        args: [
-          "run",
-          "-A",
-          path.join(cwd, "../../tests/fixture_update_check/mod.ts"),
-        ],
-        cwd,
-        env: {
-          CI: "false",
-          TEST_HOME: tmp.dir,
-          CURRENT_VERSION: CURRENT_VERSION,
-          LATEST_VERSION: "99999.9999.0",
-        },
-        stderr: "piped",
-        stdout: "piped",
-      }).output();
-
-      const { stdout } = getStdOutput(out);
-      expect(stdout).toMatch(/Fresh .* is available/);
-
-      const checkFileAfter = JSON.parse(
-        await Deno.readTextFile(
-          path.join(tmp.dir, "latest.json"),
-        ),
-      );
-
-      expect(checkFileAfter.last_shown).not.toEqual(yesterday.toISOString());
-    }, { maxAttempts: 5 });
-  },
-);
+    expect(checkFileAfter.last_shown).not.toEqual(yesterday.toISOString());
+  }, { maxAttempts: 5 });
+});

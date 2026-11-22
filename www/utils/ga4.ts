@@ -107,7 +107,7 @@ export class GA4Report {
       return;
     }
 
-    this.measurementId ??= Deno.env.get("GA4_MEASUREMENT_ID");
+    this.measurementId ??= process.env.GA4_MEASUREMENT_ID;
     if (!this.measurementId) {
       return this.warn(
         "GA4_MEASUREMENT_ID environment variable not set. " +

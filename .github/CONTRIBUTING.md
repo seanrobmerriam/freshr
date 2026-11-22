@@ -17,4 +17,4 @@ Example: `feat: add middleware compilation`
 
 ## Before submitting
 
-Run `deno task ok` and ensure it passes.
+Run `bun run ok` and ensure it passes.

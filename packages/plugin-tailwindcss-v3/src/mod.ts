@@ -1,3 +1,4 @@
+import * as fsp from "node:fs/promises";
 import type { Builder, ResolvedBuildConfig } from "fresh/dev";
 import tailwindCss, { type Config } from "tailwindcss";
 import postcss from "postcss";
@@ -80,12 +81,12 @@ async function findTailwindConfigFile(directory: string): Promise<string> {
       const ext = CONFIG_EXTENSIONS[i];
       const filePath = path.join(dir, `tailwind.config.${ext}`);
       try {
-        const stat = await Deno.stat(filePath);
-        if (stat.isFile) {
+        const stat = await fsp.stat(filePath);
+        if (stat.isFile()) {
           return filePath;
         }
       } catch (err) {
-        if (!(err instanceof Deno.errors.NotFound)) {
+        if (!((err as NodeJS.ErrnoException)?.code === "ENOENT")) {
           throw err;
         }
       }
@@ -119,7 +120,7 @@ async function initTailwind(
   // deno-lint-ignore no-explicit-any
   tailwindConfig.content = tailwindConfig.content.map((pattern: any) => {
     if (typeof pattern === "string") {
-      const relative = path.relative(Deno.cwd(), path.dirname(configPath));
+      const relative = path.relative(process.cwd(), path.dirname(configPath));
 
       if (!relative.startsWith("..")) {
         return path.join(relative, pattern);

@@ -5,17 +5,17 @@ import { updateCheck } from "../../src/dev/update_check.ts";
 async function getLatestVersion() {
   // deno-lint-ignore no-console
   console.log("fetching latest version");
-  return Deno.env.get("LATEST_VERSION") ?? "99.99.999";
+  return process.env.LATEST_VERSION ?? "99.99.999";
 }
 
 function getCurrentVersion() {
-  return Deno.env.get("CURRENT_VERSION")!;
+  return process.env.CURRENT_VERSION!;
 }
 
-const interval = +(Deno.env.get("UPDATE_INTERVAL") ?? DAY);
+const interval = +(process.env.UPDATE_INTERVAL ?? DAY);
 await updateCheck(
   interval,
-  () => Deno.env.get("TEST_HOME")!,
+  () => process.env.TEST_HOME!,
   getLatestVersion,
-  Deno.env.has("CURRENT_VERSION") ? getCurrentVersion : undefined,
+  (process.env.CURRENT_VERSION !== undefined) ? getCurrentVersion : undefined,
 );

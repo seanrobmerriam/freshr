@@ -1,3 +1,4 @@
+import { isNotFound } from "../server.ts";
 import { globToRegExp, isGlob } from "@std/path";
 import type { FsAdapter } from "../fs.ts";
 import { BUILD_ID } from "@fresh/build-id";
@@ -93,7 +94,7 @@ export class FileTransformer {
     try {
       content = await this.#fs.readFile(filePath);
     } catch (err) {
-      if (err instanceof Deno.errors.NotFound) {
+      if (isNotFound(err)) {
         return null;
       }
 

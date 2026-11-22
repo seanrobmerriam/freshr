@@ -1,10 +1,9 @@
+#!/usr/bin/env bun
 import { parseArgs } from "@std/cli/parse-args";
 import * as path from "@std/path";
-import { ensureMinDenoVersion, error } from "./utils.ts";
+import { error } from "./utils.ts";
 import { updateProject } from "./update.ts";
 import * as colors from "@std/fmt/colors";
-
-const MIN_DENO_VERSION = "1.43.1";
 
 const HELP = `@fresh/update
 
@@ -12,15 +11,13 @@ Update a Fresh project. This updates dependencies and optionally performs code
 mods to update a project's source code to the latest recommended patterns.
 
 To upgrade a project in the current directory, run:
-  deno run -A jsr:@fresh/update .
+  bunx @fresh/update .
 
 USAGE:
     @fresh/update [DIRECTORY]
 `;
 
-ensureMinDenoVersion(MIN_DENO_VERSION);
-
-const flags = parseArgs(Deno.args, {});
+const flags = parseArgs(process.argv.slice(2), {});
 
 // deno-lint-ignore no-console
 console.log(colors.bgRgb8(
@@ -30,7 +27,7 @@ console.log(colors.bgRgb8(
 // deno-lint-ignore no-console
 console.log();
 
-let unresolvedDirectory = Deno.args[0];
+let unresolvedDirectory = process.argv.slice(2)[0];
 if (flags._.length !== 1) {
   const userInput = prompt("Where is the project directory?", ".");
   if (!userInput) {

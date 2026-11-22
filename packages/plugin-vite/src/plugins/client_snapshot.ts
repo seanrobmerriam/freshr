@@ -23,7 +23,7 @@ export function clientSnapshot(options: ResolvedFreshViteConfig): Plugin[] {
       async config(cfg, env) {
         isDev = env.command === "serve";
 
-        const cwd = Deno.cwd();
+        const cwd = process.cwd();
 
         const result = await crawlFsItem({
           islandDir: pathWithRoot(options.islandsDir, cfg.root ?? cwd),

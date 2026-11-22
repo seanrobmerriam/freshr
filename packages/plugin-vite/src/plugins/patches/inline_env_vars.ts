@@ -29,11 +29,12 @@ export function inlineEnvVarsPlugin(mode: string, env: Record<string, string>) {
       name: "fresh-env-var",
       visitor: {
         MemberExpression(path) {
-          // Check: process.env.*
+          // Check: process.env.* and Bun.env.*
           if (
             t.isMemberExpression(path.node.object) &&
             t.isIdentifier(path.node.object.object) &&
-            path.node.object.object.name === "process" &&
+            (path.node.object.object.name === "process" ||
+              path.node.object.object.name === "Bun") &&
             t.isIdentifier(path.node.object.property) &&
             path.node.object.property.name === "env" &&
             t.isIdentifier(path.node.property)
@@ -55,7 +56,7 @@ export function inlineEnvVarsPlugin(mode: string, env: Record<string, string>) {
           }
         },
         CallExpression(path) {
-          // Check: Deno.env.get("<string>")
+          // Check: Deno.env.get("<string>"), kept for code written for Deno
           if (
             t.isMemberExpression(path.node.callee) &&
             t.isMemberExpression(path.node.callee.object) &&

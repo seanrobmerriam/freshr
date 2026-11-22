@@ -58,7 +58,7 @@ export function parseDirPath(
     dirPath = path.join(root, dirPath);
   }
 
-  if (Deno.build.os === "windows") {
+  if (process.platform === "win32") {
     dirPath = dirPath.replaceAll("\\", "/");
   }
 

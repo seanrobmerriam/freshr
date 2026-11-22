@@ -56,8 +56,8 @@ app.get("/", (ctx: Context<SessionState>) => {
 ```
 
 > [info]: This is a basic implementation. In production you would typically
-> store session data in a database keyed by the session ID, and add a
-> `secure: true` attribute when serving over HTTPS.
+> store session data in a database keyed by the session ID, and add a `secure:
+> true` attribute when serving over HTTPS.
 
 For more background, see the
 [MDN guide on HTTP cookies](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Cookies).

@@ -3,7 +3,7 @@
  *
  * @example
  * ```ts
- * // `BUILD_ID` is based on the `DENO_DEPLOYMENT_ID` environment variable.
+ * // `BUILD_ID` is based on the `FRESH_DEPLOYMENT_ID` environment variable.
  * ```
  *
  * @see https://usefresh.dev/docs/deployment/docker
@@ -14,13 +14,20 @@
 
 import { encodeHex } from "@std/encoding/hex";
 
-export const DENO_DEPLOYMENT_ID: string | undefined = Deno.env.get(
-  "DENO_DEPLOYMENT_ID",
-);
+const env: Record<string, string | undefined> = typeof process !== "undefined"
+  ? process.env
+  : {};
+
+/**
+ * Deployment identifier. Read from `FRESH_DEPLOYMENT_ID` and falls back to
+ * `DENO_DEPLOYMENT_ID` for compatibility with existing deployments.
+ */
+export const DENO_DEPLOYMENT_ID: string | undefined = env.FRESH_DEPLOYMENT_ID ||
+  env.DENO_DEPLOYMENT_ID || undefined;
 const deploymentId = DENO_DEPLOYMENT_ID ||
   // For CI
-  Deno.env.get("GITHUB_SHA") ||
-  Deno.env.get("CI_COMMIT_SHA") ||
+  env.GITHUB_SHA ||
+  env.CI_COMMIT_SHA ||
   crypto.randomUUID();
 const buildIdHash = await crypto.subtle.digest(
   "SHA-1",

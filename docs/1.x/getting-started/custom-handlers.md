@@ -7,10 +7,9 @@ description: |
 Routes actually consist of two parts: handlers, and the page component. Up to
 now, only the page component has been discussed in this chapter.
 
-Handlers are functions in the form of `Request => Response` or
-`Request => Promise<Response>` that are called when a request is made to a
-particular route. There can be one handler that covers all HTTP methods or one
-handler per method.
+Handlers are functions in the form of `Request => Response` or `Request =>
+Promise<Response>` that are called when a request is made to a particular route.
+There can be one handler that covers all HTTP methods or one handler per method.
 
 The handler has access to the `Request` object that backs the request to the
 route and must return a `Response` object. The response object can either be

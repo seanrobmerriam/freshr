@@ -1,5 +1,5 @@
 import type { App } from "../src/app.ts";
-import { launch, type Page } from "@astral/astral";
+import { launch, type Page } from "./browser.ts";
 import * as colors from "@std/fmt/colors";
 import { DOMParser, HTMLElement } from "linkedom";
 import { Builder, type BuildOptions } from "../src/dev/builder.ts";
@@ -8,15 +8,19 @@ import * as path from "@std/path";
 import type { ComponentChildren } from "preact";
 import { expect } from "@std/expect";
 import { mergeReadableStreams } from "@std/streams";
+import * as fs from "node:fs";
+import * as fsp from "node:fs/promises";
+import * as os from "node:os";
+import { serve } from "../src/server.ts";
 
 const browser = await launch({
   args: [
     "--window-size=1280,720",
-    ...((Deno.env.get("CI") && Deno.build.os === "linux")
+    ...((process.env.CI && process.platform === "linux")
       ? ["--no-sandbox"]
       : []),
   ],
-  headless: Deno.env.get("HEADLESS") !== "false",
+  headless: process.env.HEADLESS !== "false",
 });
 
 export const charset = <meta charset="utf-8" />;
@@ -56,7 +60,7 @@ export const ISLAND_GROUP_DIR = path.join(
 export async function buildProd(
   options: Omit<BuildOptions, "outDir">,
 ): Promise<<T>(app: App<T>) => void> {
-  const outDir = await Deno.makeTempDir();
+  const outDir = await fsp.mkdtemp(path.join(os.tmpdir(), "fresh-"));
   const builder = new Builder({ outDir, ...options });
   return await builder.build({ mode: "production", snapshot: "memory" });
 }
@@ -66,7 +70,7 @@ export async function withBrowserApp(
   fn: (page: Page, address: string) => void | Promise<void>,
 ) {
   const aborter = new AbortController();
-  await using server = Deno.serve({
+  const server = serve({
     hostname: "localhost",
     port: 0,
     signal: aborter.signal,
@@ -75,9 +79,10 @@ export async function withBrowserApp(
 
   try {
     await using page = await browser.newPage();
-    await fn(page, `http://localhost:${server.addr.port}`);
+    await fn(page, `http://localhost:${server.port}`);
   } finally {
     aborter.abort();
+    await server.finished;
   }
 }
 
@@ -102,27 +107,29 @@ export interface TestChildServerOptions {
   env?: Record<string, string>;
 }
 
+/** How long to wait for a child process server to print its address. */
+const SERVER_STARTUP_TIMEOUT = 60_000;
+
 export async function withChildProcessServer(
   options: TestChildServerOptions,
   fn: (address: string) => void | Promise<void>,
 ) {
-  const aborter = new AbortController();
-  const cp = await new Deno.Command(options.bin ?? Deno.execPath(), {
+  const cp = spawnCommand(options.bin ?? process.execPath, {
     args: options.args,
-    stdin: "null",
-    stdout: "piped",
-    stderr: "piped",
     cwd: options.cwd,
-    signal: aborter.signal,
     env: options.env,
-  }).spawn();
+  });
 
   const linesStdout: ReadableStream<string> = cp.stdout
-    .pipeThrough(new TextDecoderStream())
+    .pipeThrough(
+      new TextDecoderStream() as unknown as TransformStream<Uint8Array, string>,
+    )
     .pipeThrough(new TextLineStream());
 
   const linesStderr: ReadableStream<string> = cp.stderr
-    .pipeThrough(new TextDecoderStream())
+    .pipeThrough(
+      new TextDecoderStream() as unknown as TransformStream<Uint8Array, string>,
+    )
     .pipeThrough(new TextLineStream());
 
   const lines = mergeReadableStreams(linesStdout, linesStderr);
@@ -130,24 +137,51 @@ export async function withChildProcessServer(
   const output: string[] = [];
   let address = "";
   let found = false;
-  // @ts-ignore yes it does
-  for await (const raw of lines.values({ preventCancel: true })) {
-    const line = colors.stripAnsiCode(raw);
-    output.push(line);
-    const match = line.match(
-      /https?:\/\/[^:]+:\d+(\/\w+[-\w]*)*/g,
-    );
-    if (match) {
-      address = match[0];
-      found = true;
-      break;
+  let timedOut = false;
+
+  // Give up if the server doesn't print its address in time, so that the
+  // output ends up in the test log instead of the test silently timing out.
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<"timeout">((resolve) => {
+    timer = setTimeout(() => resolve("timeout"), SERVER_STARTUP_TIMEOUT);
+  });
+  const reader = lines.getReader();
+  try {
+    while (true) {
+      const read = reader.read();
+      // Rejects when the lock is released after a timeout
+      read.catch(() => {});
+      const result = await Promise.race([read, deadline]);
+      if (result === "timeout") {
+        timedOut = true;
+        break;
+      }
+      if (result.done) break;
+      const line = colors.stripAnsiCode(result.value);
+      output.push(line);
+      const match = line.match(
+        /https?:\/\/[^:]+:\d+(\/\w+[-\w]*)*/g,
+      );
+      if (match) {
+        address = match[0];
+        found = true;
+        break;
+      }
     }
+  } finally {
+    clearTimeout(timer);
+    reader.releaseLock();
   }
 
   if (!found) {
+    cp.kill();
     // deno-lint-ignore no-console
     console.log(output);
-    throw new Error(`Could not find server address`);
+    throw new Error(
+      timedOut
+        ? `Server didn't print its address within ${SERVER_STARTUP_TIMEOUT}ms`
+        : `Could not find server address`,
+    );
   }
 
   let failed = false;
@@ -159,7 +193,7 @@ export async function withChildProcessServer(
     failed = true;
     throw err;
   } finally {
-    aborter.abort();
+    cp.kill();
     await cp.status;
     for await (const line of lines) {
       output.push(line);
@@ -342,8 +376,90 @@ export async function waitFor(
   throw new Error(`Timed out`);
 }
 
+export interface CommandOutput {
+  code: number;
+  success: boolean;
+  stdout: Uint8Array;
+  stderr: Uint8Array;
+}
+
+export interface CommandOptions {
+  args?: string[];
+  cwd?: string;
+  env?: Record<string, string | undefined>;
+  stdin?: "null" | "inherit" | "piped";
+  stdout?: "null" | "inherit" | "piped";
+  stderr?: "null" | "inherit" | "piped";
+}
+
+function toBunStdio(
+  value: "null" | "inherit" | "piped" | undefined,
+  fallback: "ignore" | "inherit" | "pipe",
+): "ignore" | "inherit" | "pipe" {
+  if (value === undefined) return fallback;
+  return value === "null" ? "ignore" : value === "piped" ? "pipe" : "inherit";
+}
+
+function mergedEnv(env: CommandOptions["env"]): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries({ ...process.env, ...env })) {
+    if (v !== undefined) out[k] = v;
+  }
+  return out;
+}
+
+/**
+ * Spawn a process and collect its output. Mirrors
+ * `new Deno.Command(bin, options).output()`: stdout and stderr are piped
+ * by default and the parent environment is inherited.
+ */
+export async function runCommand(
+  bin: string,
+  options: CommandOptions = {},
+): Promise<CommandOutput> {
+  const proc = Bun.spawn([bin, ...(options.args ?? [])], {
+    cwd: options.cwd,
+    env: mergedEnv(options.env),
+    stdin: toBunStdio(options.stdin, "ignore"),
+    stdout: toBunStdio(options.stdout, "pipe"),
+    stderr: toBunStdio(options.stderr, "pipe"),
+  });
+  const [stdout, stderr, code] = await Promise.all([
+    proc.stdout instanceof ReadableStream
+      ? new Response(proc.stdout).bytes()
+      : Promise.resolve(new Uint8Array()),
+    proc.stderr instanceof ReadableStream
+      ? new Response(proc.stderr).bytes()
+      : Promise.resolve(new Uint8Array()),
+    proc.exited,
+  ]);
+  return { code, success: code === 0, stdout, stderr };
+}
+
+/** Spawn a long running process with piped output. */
+export function spawnCommand(bin: string, options: CommandOptions = {}): {
+  stdout: ReadableStream<Uint8Array>;
+  stderr: ReadableStream<Uint8Array>;
+  status: Promise<number>;
+  kill(): void;
+} {
+  const proc = Bun.spawn([bin, ...(options.args ?? [])], {
+    cwd: options.cwd,
+    env: mergedEnv(options.env),
+    stdin: "ignore",
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  return {
+    stdout: proc.stdout,
+    stderr: proc.stderr,
+    status: proc.exited,
+    kill: () => proc.kill(),
+  };
+}
+
 export function getStdOutput(
-  out: Deno.CommandOutput,
+  out: CommandOutput,
 ): { stdout: string; stderr: string } {
   const decoder = new TextDecoder();
   const stdout = colors.stripAnsiCode(decoder.decode(out.stdout));
@@ -356,7 +472,9 @@ export function getStdOutput(
 
 const ISLAND_FIXTURE_DIR = path.join(import.meta.dirname!, "fixtures_islands");
 const allIslandBuilder = new Builder({});
-for await (const entry of Deno.readDirSync(ISLAND_FIXTURE_DIR)) {
+for (
+  const entry of fs.readdirSync(ISLAND_FIXTURE_DIR, { withFileTypes: true })
+) {
   if (entry.name.endsWith(".json")) continue;
 
   const spec = path.join(ISLAND_FIXTURE_DIR, entry.name);

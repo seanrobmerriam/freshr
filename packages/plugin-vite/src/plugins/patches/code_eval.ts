@@ -95,7 +95,7 @@ function evaluateExpr(
       t.isStringLiteral(node.right)
     ) {
       state.set(APPLY_PG_QUIRKS, true);
-      const left = typeof Deno.env.get("NODE_PG_FORCE_NATIVE");
+      const left = typeof process.env.NODE_PG_FORCE_NATIVE;
       const right = node.right.value;
 
       const result = applyBinExpr(left, right, node);

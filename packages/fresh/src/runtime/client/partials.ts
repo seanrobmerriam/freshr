@@ -196,7 +196,8 @@ document.addEventListener("click", async (e) => {
   }
 });
 
-addEventListener("popstate", async (e) => {
+addEventListener("popstate", async (ev) => {
+  const e = ev as PopStateEvent;
   // When state is `null` then the browser navigated to a document
   // fragment. In this case we do nothing.
   if (e.state === null) {
@@ -623,7 +624,7 @@ function revivePartials(
         }
       }
     } else if (partialCount === 0 && isElementNode(sib)) {
-      // Do not recurse if we know that we are inisde a partial
+      // Do not recurse if we know that we are inside a partial
       revivePartials(ctx, allProps, sib);
     }
 

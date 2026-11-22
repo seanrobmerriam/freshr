@@ -1,0 +1,38 @@
+{
+  "name": "@fresh/core",
+  "version": "2.3.3",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/mod.ts",
+    "./runtime": "./src/runtime/shared.ts",
+    "./runtime-client": "./src/runtime/client/mod.ts",
+    "./dev": "./src/dev/mod.ts",
+    "./compat": "./src/compat.ts",
+    "./internal": "./src/internals.ts",
+    "./internal-dev": "./src/internals_dev.ts"
+  },
+  "dependencies": {
+    "@fresh/build-id": "workspace:packages/build-id",
+    "@opentelemetry/api": "^1.9.0",
+    "@std/encoding": "npm:@jsr/std__encoding@^1.0.10",
+    "@std/fmt": "npm:@jsr/std__fmt@^1.0.8",
+    "@std/fs": "npm:@jsr/std__fs@^1.0.19",
+    "@std/html": "npm:@jsr/std__html@^1.0.5",
+    "@std/http": "npm:@jsr/std__http@^1.0.21",
+    "@std/jsonc": "npm:@jsr/std__jsonc@^1.0.2",
+    "@std/media-types": "npm:@jsr/std__media-types@^1.1.0",
+    "@std/net": "npm:@jsr/std__net@^1.0.6",
+    "@std/path": "npm:@jsr/std__path@^1.1.2",
+    "@std/semver": "npm:@jsr/std__semver@^1.0.6",
+    "@std/uuid": "npm:@jsr/std__uuid@^1.0.9",
+    "esbuild": "^0.25.11",
+    "preact": "^10.29.1",
+    "preact-render-to-string": "^6.6.3",
+    "ws": "^8.18.3"
+  },
+  "devDependencies": {
+    "@types/node": "^24.2.1",
+    "@types/ws": "^8.18.2"
+  }
+}

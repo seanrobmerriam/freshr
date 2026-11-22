@@ -1,8 +1,9 @@
+import { test } from "bun:test";
 import { App } from "../app.ts";
 import { cors } from "./cors.ts";
 import { expect } from "@std/expect";
 
-Deno.test("CORS - GET default", async () => {
+test("CORS - GET default", async () => {
   const handler = new App()
     .use(cors())
     .get("/", () => new Response("ok"))
@@ -15,7 +16,7 @@ Deno.test("CORS - GET default", async () => {
   expect(res.headers.get("Vary")).toBeNull();
 });
 
-Deno.test("CORS - Preflight default", async () => {
+test("CORS - Preflight default", async () => {
   const handler = new App()
     .use(cors())
     .get("/", () => new Response("ok"))
@@ -36,7 +37,7 @@ Deno.test("CORS - Preflight default", async () => {
     .toEqual(["X-PINGOTHER", "Content-Type"]);
 });
 
-Deno.test("CORS - Preflight with options", async () => {
+test("CORS - Preflight with options", async () => {
   const handler = new App()
     .use(
       cors({
@@ -84,7 +85,7 @@ Deno.test("CORS - Preflight with options", async () => {
   expect(res.headers.get("Access-Control-Allow-Credentials")).toBe("true");
 });
 
-Deno.test("CORS - Disallow an unmatched origin", async () => {
+test("CORS - Disallow an unmatched origin", async () => {
   const handler = new App()
     .use(
       cors({
@@ -109,7 +110,7 @@ Deno.test("CORS - Disallow an unmatched origin", async () => {
   expect(res.headers.has("Access-Control-Allow-Origin")).toBeFalsy();
 });
 
-Deno.test("CORS - Allow multiple origins", async () => {
+test("CORS - Allow multiple origins", async () => {
   const handler = new App()
     .use(cors({
       origin: [
@@ -151,7 +152,7 @@ Deno.test("CORS - Allow multiple origins", async () => {
   ).toBeFalsy();
 });
 
-Deno.test("CORS - Allow different Vary header value", async () => {
+test("CORS - Allow different Vary header value", async () => {
   const handler = new App()
     .use(cors({
       origin: [
@@ -179,7 +180,7 @@ Deno.test("CORS - Allow different Vary header value", async () => {
   expect(res.headers.get("Vary")).toBe("Origin");
 });
 
-Deno.test("CORS - Allow origins by function", async () => {
+test("CORS - Allow origins by function", async () => {
   const handler = new App()
     .use(cors({
       origin: (
@@ -217,7 +218,7 @@ Deno.test("CORS - Allow origins by function", async () => {
   );
 });
 
-Deno.test("CORS - With raw Response object", async () => {
+test("CORS - With raw Response object", async () => {
   const handler = new App()
     .use(cors())
     .get("/", () => new Response("ok"))
@@ -229,7 +230,7 @@ Deno.test("CORS - With raw Response object", async () => {
   expect(res.headers.get("Vary")).toBeNull();
 });
 
-Deno.test("CORS - Should not return duplicate header values", async () => {
+test("CORS - Should not return duplicate header values", async () => {
   const handler = new App()
     .use(cors({ origin: "http://example.com" }))
     .get("/", () => new Response("ok"))

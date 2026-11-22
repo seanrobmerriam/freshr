@@ -1,3 +1,5 @@
+import * as fsp from "node:fs/promises";
+import { test } from "bun:test";
 import * as path from "@std/path";
 import {
   FRESH_VERSION,
@@ -7,7 +9,7 @@ import {
 } from "./update.ts";
 import { expect } from "@std/expect";
 import { spy, type SpyCall } from "@std/testing/mock";
-import { walk } from "@std/fs/walk";
+import { walk } from "./walk.ts";
 import { withTmpDir, writeFiles } from "../../fresh/src/test_utils.ts";
 
 async function readFiles(dir: string): Promise<Record<string, string>> {
@@ -17,14 +19,14 @@ async function readFiles(dir: string): Promise<Record<string, string>> {
     const entry of walk(dir, { includeDirs: false, includeFiles: true })
   ) {
     const pathname = path.relative(dir, entry.path);
-    const content = await Deno.readTextFile(entry.path);
+    const content = await fsp.readFile(entry.path, "utf-8");
     files[`/${pathname.replaceAll(/[\\]+/g, "/")}`] = content.trim();
   }
 
   return files;
 }
 
-Deno.test("update - remove JSX pragma import", async () => {
+test("update - remove JSX pragma import", async () => {
   await using _tmp = await withTmpDir();
   const dir = _tmp.dir;
   await writeFiles(dir, {
@@ -46,7 +48,7 @@ export default function Foo() {
 }`);
 });
 
-Deno.test("update - 1.x project deno.json", async () => {
+test("update - 1.x project deno.json", async () => {
   await using _tmp = await withTmpDir();
   const dir = _tmp.dir;
   await writeFiles(dir, {
@@ -56,23 +58,31 @@ Deno.test("update - 1.x project deno.json", async () => {
   await updateProject(dir);
   const files = await readFiles(dir);
 
-  expect(JSON.parse(files["/deno.json"]))
-    .toEqual({
-      imports: {
-        "fresh": `jsr:@fresh/core@^${FRESH_VERSION}`,
-        "@preact/signals": `npm:@preact/signals@^${PREACT_SIGNALS_VERSION}`,
-        "preact": `npm:preact@^${PREACT_VERSION}`,
-      },
-    });
+  const pkg = JSON.parse(files["/package.json"]);
+  expect(pkg.dependencies).toEqual({
+    "fresh": `npm:@fresh/core@^${FRESH_VERSION}`,
+    "@preact/signals": `^${PREACT_SIGNALS_VERSION}`,
+    "preact": `^${PREACT_VERSION}`,
+  });
+
+  const tsconfig = JSON.parse(files["/tsconfig.json"]);
+  expect(tsconfig.compilerOptions).toEqual({
+    jsx: "react-jsx",
+    jsxImportSource: "preact",
+  });
 });
 
-Deno.test("update - 1.x project deno.json with imports", async () => {
+test("update - 1.x project deno.json with imports", async () => {
   await using _tmp = await withTmpDir();
   const dir = _tmp.dir;
   await writeFiles(dir, {
     "/deno.json": `{
         "imports": {
-          "$fresh/": "foo"
+          "$fresh/": "foo",
+          "$std/": "https://deno.land/std@0.211.0/",
+          "@/": "./",
+          "zod": "npm:zod@^3.22.0",
+          "@std/path": "jsr:@std/path@^1.0.0"
         }
       }`,
   });
@@ -80,17 +90,20 @@ Deno.test("update - 1.x project deno.json with imports", async () => {
   await updateProject(dir);
   const files = await readFiles(dir);
 
-  expect(JSON.parse(files["/deno.json"]))
-    .toEqual({
-      imports: {
-        "fresh": `jsr:@fresh/core@^${FRESH_VERSION}`,
-        "@preact/signals": `npm:@preact/signals@^${PREACT_SIGNALS_VERSION}`,
-        "preact": `npm:preact@^${PREACT_VERSION}`,
-      },
-    });
+  const pkg = JSON.parse(files["/package.json"]);
+  expect(pkg.dependencies).toEqual({
+    "fresh": `npm:@fresh/core@^${FRESH_VERSION}`,
+    "@preact/signals": `^${PREACT_SIGNALS_VERSION}`,
+    "preact": `^${PREACT_VERSION}`,
+    "zod": "^3.22.0",
+    "@std/path": "npm:@jsr/std__path@^1.0.0",
+  });
+
+  const tsconfig = JSON.parse(files["/tsconfig.json"]);
+  expect(tsconfig.compilerOptions.paths).toEqual({ "@/*": ["./*"] });
 });
 
-Deno.test("update - 1.x project deno.json tasks + lock", async () => {
+test("update - 1.x project deno.json tasks + lock", async () => {
   await using tmp = await withTmpDir();
   await writeFiles(tmp.dir, {
     "/deno.json": `{
@@ -110,19 +123,47 @@ Deno.test("update - 1.x project deno.json tasks + lock", async () => {
   await updateProject(tmp.dir);
   const files = await readFiles(tmp.dir);
 
-  const updated = JSON.parse(files["/deno.json"]);
-  expect(updated.lock).toEqual(undefined);
-  expect(updated.tasks)
+  const pkg = JSON.parse(files["/package.json"]);
+  expect(pkg.scripts)
     .toEqual({
-      build: "deno run -A dev.ts build",
-      check: "deno fmt --check && deno lint && deno check",
-      preview: "deno serve -A _fresh/server.js",
-      start: "deno run -A --watch=static/,routes/ dev.ts",
-      update: "deno run -A -r jsr:@fresh/update .",
+      build: "bun dev.ts build",
+      check: "tsc --noEmit",
+      preview: "bun main.ts",
+      start: "bun --watch dev.ts",
+      update: "bunx @fresh/update@latest .",
     });
 });
 
-Deno.test("update - 1.x project middlewares", async () => {
+test("update - existing package.json", async () => {
+  await using tmp = await withTmpDir();
+  await writeFiles(tmp.dir, {
+    "/package.json": JSON.stringify({
+      name: "my-app",
+      scripts: { dev: "bun --bun vite" },
+      dependencies: {
+        "fresh": "npm:@fresh/core@^2.0.0",
+        "preact": "^10.0.0",
+        "preact-render-to-string": "^6.0.0",
+      },
+    }),
+  });
+
+  await updateProject(tmp.dir);
+  const files = await readFiles(tmp.dir);
+
+  const pkg = JSON.parse(files["/package.json"]);
+  expect(pkg).toEqual({
+    name: "my-app",
+    scripts: { dev: "bun --bun vite" },
+    dependencies: {
+      "fresh": `npm:@fresh/core@^${FRESH_VERSION}`,
+      "@preact/signals": `^${PREACT_SIGNALS_VERSION}`,
+      "preact": `^${PREACT_VERSION}`,
+    },
+  });
+});
+
+test("update - 1.x project middlewares", async () => {
   await using _tmp = await withTmpDir();
   const dir = _tmp.dir;
   await writeFiles(dir, {
@@ -168,7 +209,7 @@ export async function handler(
 }`);
 });
 
-Deno.test("update - 1.x project middlewares one arg", async () => {
+test("update - 1.x project middlewares one arg", async () => {
   await using _tmp = await withTmpDir();
   const dir = _tmp.dir;
   await writeFiles(dir, {
@@ -191,7 +232,7 @@ export async function handler(ctx: FreshContext) {
 }`);
 });
 
-Deno.test("update - 1.x update '$fresh/*' imports", async () => {
+test("update - 1.x update '$fresh/*' imports", async () => {
   await using _tmp = await withTmpDir();
   const dir = _tmp.dir;
   await writeFiles(dir, {
@@ -215,7 +256,7 @@ export default function Foo(props: PageProps) {
     .toEqual(`import { asset, Head } from "fresh/runtime";`);
 });
 
-Deno.test("update - 1.x update handler signature", async () => {
+test("update - 1.x update handler signature", async () => {
   await using _tmp = await withTmpDir();
   const dir = _tmp.dir;
   await writeFiles(dir, {
@@ -324,84 +365,76 @@ export const handler: Handlers = {
 };`);
 });
 
-Deno.test(
-  "update - 1.x update handler signature method one arg",
-  async () => {
-    await using _tmp = await withTmpDir();
-    const dir = _tmp.dir;
-    await writeFiles(dir, {
-      "/deno.json": `{}`,
-      "/routes/index.tsx": `export const handler: Handlers = {
+test("update - 1.x update handler signature method one arg", async () => {
+  await using _tmp = await withTmpDir();
+  const dir = _tmp.dir;
+  await writeFiles(dir, {
+    "/deno.json": `{}`,
+    "/routes/index.tsx": `export const handler: Handlers = {
   GET(req) {
     return Response.redirect(req.url);
   },
 };`,
-    });
-    await updateProject(dir);
-    const files = await readFiles(dir);
-    expect(files["/routes/index.tsx"])
-      .toEqual(`export const handler: Handlers = {
+  });
+  await updateProject(dir);
+  const files = await readFiles(dir);
+  expect(files["/routes/index.tsx"])
+    .toEqual(`export const handler: Handlers = {
   GET(ctx) {
     const req = ctx.req;
 
     return Response.redirect(req.url);
   },
 };`);
-  },
-);
+});
 
-Deno.test.ignore(
-  "update - 1.x update handler signature variable",
-  async () => {
-    await using _tmp = await withTmpDir();
-    const dir = _tmp.dir;
-    await writeFiles(dir, {
-      "/deno.json": `{}`,
-      "/routes/index.tsx": `export const handler: Handlers = {
+test.skip("update - 1.x update handler signature variable", async () => {
+  await using _tmp = await withTmpDir();
+  const dir = _tmp.dir;
+  await writeFiles(dir, {
+    "/deno.json": `{}`,
+    "/routes/index.tsx": `export const handler: Handlers = {
   GET: (req) => Response.redirect(req.url)
 };`,
-      "/routes/foo.tsx": `export const handler: Handlers = {
+    "/routes/foo.tsx": `export const handler: Handlers = {
   GET: (req, ctx) => Response.redirect(req.url),
 };`,
-    });
-    await updateProject(dir);
-    const files = await readFiles(dir);
-    expect(files["/routes/index.tsx"])
-      .toEqual(`export const handler: Handlers = {
+  });
+  await updateProject(dir);
+  const files = await readFiles(dir);
+  expect(files["/routes/index.tsx"])
+    .toEqual(`export const handler: Handlers = {
   GET: (ctx) => {
     const req = ctx.req;
 
     return Response.redirect(req.url);
   },
 };`);
-    expect(files["/routes/foo.tsx"])
-      .toEqual(`export const handler: Handlers = {
+  expect(files["/routes/foo.tsx"])
+    .toEqual(`export const handler: Handlers = {
   GET: (ctx) => {
     const req = ctx.req;
 
     return Response.redirect(req.url);
   },
 };`);
-  },
-);
+});
 
-Deno.test(
-  "update - 1.x update handler signature non-inferred",
-  async () => {
-    await using _tmp = await withTmpDir();
-    const dir = _tmp.dir;
-    await writeFiles(dir, {
-      "/deno.json": `{}`,
-      "/routes/index.tsx": `export const handler = {
+test("update - 1.x update handler signature non-inferred", async () => {
+  await using _tmp = await withTmpDir();
+  const dir = _tmp.dir;
+  await writeFiles(dir, {
+    "/deno.json": `{}`,
+    "/routes/index.tsx": `export const handler = {
   GET(req: Request){
     return Response.redirect(req.url);
   }
 };`,
-    });
-    await updateProject(dir);
-    const files = await readFiles(dir);
-    expect(files["/routes/index.tsx"])
-      .toEqual(`import { FreshContext } from "fresh";
+  });
+  await updateProject(dir);
+  const files = await readFiles(dir);
+  expect(files["/routes/index.tsx"])
+    .toEqual(`import { FreshContext } from "fresh";
 
 export const handler = {
   GET(ctx: FreshContext) {
@@ -410,17 +443,14 @@ export const handler = {
     return Response.redirect(req.url);
   },
 };`);
-  },
-);
+});
 
-Deno.test(
-  "update - 1.x update handler signature with destructure",
-  async () => {
-    await using _tmp = await withTmpDir();
-    const dir = _tmp.dir;
-    await writeFiles(dir, {
-      "/deno.json": `{}`,
-      "/routes/index.tsx": `import { Handlers } from "$fresh/server.ts";
+test("update - 1.x update handler signature with destructure", async () => {
+  await using _tmp = await withTmpDir();
+  const dir = _tmp.dir;
+  await writeFiles(dir, {
+    "/deno.json": `{}`,
+    "/routes/index.tsx": `import { Handlers } from "$fresh/server.ts";
 
 export const handler: Handlers = {
   async GET(req, { params, render, remoteAddr }) {},
@@ -429,11 +459,11 @@ export const handler: Handlers = {
   async PUT(req, { params, render, remoteAddr }) {},
   async DELETE(req, { params, render, remoteAddr }) {},
 };`,
-    });
-    await updateProject(dir);
-    const files = await readFiles(dir);
-    expect(files["/routes/index.tsx"])
-      .toEqual(`import { Handlers } from "fresh/compat";
+  });
+  await updateProject(dir);
+  const files = await readFiles(dir);
+  expect(files["/routes/index.tsx"])
+    .toEqual(`import { Handlers } from "fresh/compat";
 
 export const handler: Handlers = {
   async GET({ params, render, info, req }) {
@@ -452,10 +482,9 @@ export const handler: Handlers = {
     const remoteAddr = info.remoteAddr;
   },
 };`);
-  },
-);
+});
 
-Deno.test("update - 1.x update define* handler signatures", async () => {
+test("update - 1.x update define* handler signatures", async () => {
   await using _tmp = await withTmpDir();
   const dir = _tmp.dir;
   await writeFiles(dir, {
@@ -503,15 +532,13 @@ export default defineRoute(async (ctx) => {
 });`);
 });
 
-Deno.test(
-  "update - 1.x update component signature async",
-  async () => {
-    await using _tmp = await withTmpDir();
-    const dir = _tmp.dir;
-    await writeFiles(dir, {
-      "/deno.json": `{}`,
-      "/routes/index.tsx":
-        `export default async function Index(req: Request, ctx: RouteContext) {
+test("update - 1.x update component signature async", async () => {
+  await using _tmp = await withTmpDir();
+  const dir = _tmp.dir;
+  await writeFiles(dir, {
+    "/deno.json": `{}`,
+    "/routes/index.tsx":
+      `export default async function Index(req: Request, ctx: RouteContext) {
   if (true) {
     return ctx.renderNotFound();
   }
@@ -521,11 +548,11 @@ Deno.test(
   }
   return new Response(req.url);
 }`,
-    });
-    await updateProject(dir);
-    const files = await readFiles(dir);
-    expect(files["/routes/index.tsx"])
-      .toEqual(`import { FreshContext } from "fresh";
+  });
+  await updateProject(dir);
+  const files = await readFiles(dir);
+  expect(files["/routes/index.tsx"])
+    .toEqual(`import { FreshContext } from "fresh";
 import { HttpError } from "fresh";
 
 export default async function Index(ctx: FreshContext) {
@@ -540,33 +567,30 @@ export default async function Index(ctx: FreshContext) {
   }
   return new Response(req.url);
 }`);
-  },
-);
+});
 
-Deno.test.ignore(
-  "update - 1.x ctx.renderNotFound() -> throw new HttpError(404)",
-  async () => {
-    await using _tmp = await withTmpDir();
-    const dir = _tmp.dir;
-    await writeFiles(dir, {
-      "/deno.json": `{}`,
-      "/routes/index.tsx": `import { Handlers } from "$fresh/server.ts";
+test.skip("update - 1.x ctx.renderNotFound() -> throw new HttpError(404)", async () => {
+  await using _tmp = await withTmpDir();
+  const dir = _tmp.dir;
+  await writeFiles(dir, {
+    "/deno.json": `{}`,
+    "/routes/index.tsx": `import { Handlers } from "$fresh/server.ts";
 
 export const handler: Handlers = {
   async GET(_req, ctx) {
     return ctx.renderNotFound();
   },
 };`,
-      "/routes/foo.tsx": `export const handler = (ctx) => {
+    "/routes/foo.tsx": `export const handler = (ctx) => {
   return ctx.renderNotFound();
 }`,
-    });
+  });
 
-    await updateProject(dir);
-    const files = await readFiles(dir);
+  await updateProject(dir);
+  const files = await readFiles(dir);
 
-    expect(files["/routes/index.tsx"])
-      .toEqual(`import { Handlers } from "fresh";
+  expect(files["/routes/index.tsx"])
+    .toEqual(`import { Handlers } from "fresh";
 
 export const handler: Handlers = {
   async GET(ctx) {
@@ -574,21 +598,18 @@ export const handler: Handlers = {
   },
 };`);
 
-    expect(files["/routes/foo.tsx"])
-      .toEqual(`export const handler = (ctx) => {
+  expect(files["/routes/foo.tsx"])
+    .toEqual(`export const handler = (ctx) => {
   throw HttpError(404);
 };`);
-  },
-);
+});
 
-Deno.test.ignore(
-  "update - 1.x ctx.remoteAddr -> ctx.info.remoteAddr",
-  async () => {
-    await using _tmp = await withTmpDir();
-    const dir = _tmp.dir;
-    await writeFiles(dir, {
-      "/deno.json": `{}`,
-      "/routes/index.tsx": `import { Handlers } from "$fresh/server.ts";
+test.skip("update - 1.x ctx.remoteAddr -> ctx.info.remoteAddr", async () => {
+  await using _tmp = await withTmpDir();
+  const dir = _tmp.dir;
+  await writeFiles(dir, {
+    "/deno.json": `{}`,
+    "/routes/index.tsx": `import { Handlers } from "$fresh/server.ts";
 
 export const handler: Handlers = {
   async GET(_req, ctx) {
@@ -597,13 +618,13 @@ export const handler: Handlers = {
     return new Response(msg);
   },
 };`,
-    });
+  });
 
-    await updateProject(dir);
-    const files = await readFiles(dir);
+  await updateProject(dir);
+  const files = await readFiles(dir);
 
-    expect(files["/routes/index.tsx"])
-      .toEqual(`import { Handlers } from "fresh";
+  expect(files["/routes/index.tsx"])
+    .toEqual(`import { Handlers } from "fresh";
 
 export const handler: Handlers = {
   async GET(ctx) {
@@ -612,10 +633,9 @@ export const handler: Handlers = {
     return new Response(msg);
   },
 };`);
-  },
-);
+});
 
-Deno.test.ignore("update - 1.x destructured ctx members", async () => {
+test.skip("update - 1.x destructured ctx members", async () => {
   await using _tmp = await withTmpDir();
   const dir = _tmp.dir;
   await writeFiles(dir, {
@@ -655,7 +675,7 @@ export const handler: Handlers = {
 };`);
 });
 
-Deno.test("update - 1.x remove reference comments", async () => {
+test("update - 1.x remove reference comments", async () => {
   await using _tmp = await withTmpDir();
   const dir = _tmp.dir;
   await writeFiles(dir, {
@@ -674,7 +694,7 @@ Deno.test("update - 1.x remove reference comments", async () => {
   expect(files["/routes/main.ts"]).toEqual("");
 });
 
-Deno.test("update - island files", async () => {
+test("update - island files", async () => {
   await using _tmp = await withTmpDir();
   const dir = _tmp.dir;
   await writeFiles(dir, {
@@ -690,7 +710,7 @@ Deno.test("update - island files", async () => {
   );
 });
 
-Deno.test("update - ignores node_modules and vendor in logs", async () => {
+test("update - ignores node_modules and vendor in logs", async () => {
   await using _tmp = await withTmpDir();
   const dir = _tmp.dir;
   await writeFiles(dir, {

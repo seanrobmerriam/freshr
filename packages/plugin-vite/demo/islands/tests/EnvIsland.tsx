@@ -6,6 +6,7 @@ export function EnvIsland() {
     setReady(true);
   }, []);
 
+  // @ts-expect-error Deno style env access, inlined by @fresh/plugin-vite
   const deno = Deno.env.get("FRESH_PUBLIC_FOO");
   // deno-lint-ignore no-process-global
   const nodeEnv = process.env.FRESH_PUBLIC_FOO;

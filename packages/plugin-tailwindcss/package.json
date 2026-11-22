@@ -1,0 +1,15 @@
+{
+  "name": "@fresh/plugin-tailwind",
+  "version": "1.0.0",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/mod.ts"
+  },
+  "dependencies": {
+    "@tailwindcss/postcss": "^4.1.10",
+    "fresh": "workspace:packages/fresh",
+    "postcss": "^8.5.25",
+    "tailwindcss": "^4.1.10"
+  }
+}
